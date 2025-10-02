@@ -113,29 +113,27 @@ pub struct Fat3 {
 }
 
 impl Fat3 {
-    pub fn deserialize(data: impl Read) -> Result<Fat3> {
-        let mut buf = io::BufReader::new(data);
-
-        let magic = buf.read_u32::<LE>()?;
+    pub fn deserialize(data: &mut impl Read) -> Result<Fat3> {
+        let magic = data.read_u32::<LE>()?;
         if magic != FAT3_SIGNATURE {
             return Err(Error::BadMagic(magic));
         }
 
-        let entry_version = buf.read_u32::<LE>()?;
+        let entry_version = data.read_u32::<LE>()?;
         let entry_deserializer: fn([u8; 16], u8) -> Result<Entry> = match entry_version {
             8 => Ok(Entry::deserialize_v8),
             _ => Err(Error::UnsupportedEntryVersion(entry_version))
         }?;
 
-        let flags = buf.read_u32::<LE>()?;
+        let flags = data.read_u32::<LE>()?;
         let platform = Platform::from_id((flags & 0xFF) as u8)?;
         let compression_version = (flags >> 8 & 0xFF) as u8;
 
-        let entry_count = buf.read_u32::<LE>()?;
+        let entry_count = data.read_u32::<LE>()?;
         let mut entries = Vec::new();
         for _ in 0..entry_count {
             let mut entry_buf: [u8; 16] = [0; 16];
-            buf.read_exact(&mut entry_buf)?;
+            data.read_exact(&mut entry_buf)?;
 
             let entry = entry_deserializer(entry_buf, compression_version)?;
             entries.push(entry);
