@@ -1,10 +1,10 @@
-mod compression;
-
 use std::fmt;
 use std::io;
 use std::io::Read;
 use compression::CompressionScheme;
 use byteorder::{ReadBytesExt, LE};
+
+mod compression;
 
 #[derive(Debug)]
 pub enum Error {
