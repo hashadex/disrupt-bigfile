@@ -1,0 +1,3 @@
+[submodule "filelists/wd1"]
+	path = filelists/wd1
+	url = https://github.com/gibbed/WatchDogs-File-Lists.git
