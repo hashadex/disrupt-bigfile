@@ -6,6 +6,7 @@ use compression::CompressionScheme;
 use byteorder::{ReadBytesExt, LE};
 
 mod compression;
+mod filelists;
 
 #[derive(Debug)]
 pub enum Error {
