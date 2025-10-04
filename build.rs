@@ -73,13 +73,14 @@ fn build_filelists(game_name: &str) -> Result<(), io::Error> {
                 continue;
             }
 
-            name_hash_map.insert(name_hash, line.replace("\\", "/"));
+            name_hash_map.insert(name_hash, line);
         }
     }
 
     let mut phf_map = phf_codegen::Map::new();
     for (hash, name) in name_hash_map {
-        phf_map.entry(hash, format!("\"{name}\""));
+        let escaped_name = name.replace("\\", "\\\\");
+        phf_map.entry(hash, format!("\"{escaped_name}\""));
     }
 
     let out_dir_path = env::var("OUT_DIR").expect("OUT_DIR should be set by cargo during build");
