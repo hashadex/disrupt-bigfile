@@ -4,106 +4,94 @@ use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-fn filelist_paths_from_dir(dir_path: &Path, path_vec: &mut Vec<PathBuf>) -> Result<(), io::Error> {
-    for entry in fs::read_dir(dir_path)? {
-        let entry = entry?;
-        let path = entry.path();
-        let metadata = entry.metadata()?;
+fn recurse_get_filelist_paths(dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
+    let mut filelist_paths = Vec::new();
 
-        if metadata.is_dir() {
-            filelist_paths_from_dir(&path, path_vec)?;
+    for entry in fs::read_dir(dir)?.map_while(Result::ok) {
+        let path = entry.path();
+
+        if entry.metadata()?.is_dir() {
+            let mut child_dir_paths = recurse_get_filelist_paths(&path)?;
+            filelist_paths.append(&mut child_dir_paths);
         } else if path.extension().is_some_and(|ext| ext == "filelist") {
-            path_vec.push(path);
+            filelist_paths.push(path);
         }
     }
-    
-    Ok(())
+
+    Ok(filelist_paths)
 }
 
-fn hash_fnv1a64(data: &str) -> u64 {
-    // Set hash to initial seed
-    let mut hash: u64 = 0xCBF29CE484222325;
+fn fnv1_hash(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xCBF29CE484222325; // Set hash to default seed
 
-    for byte in data.as_bytes() {
+    for &byte in bytes {
         hash = hash.wrapping_mul(0x100000001B3);
-        hash ^= *byte as u64;
+        hash ^= byte as u64;
     }
 
     hash
 }
 
-fn build_filelists(game_name: &str) -> Result<(), io::Error> {
-    let filelist_dir_path: PathBuf = ["filelists", game_name].iter().collect();
-    let mut filelist_paths = Vec::new();
-    filelist_paths_from_dir(&filelist_dir_path, &mut filelist_paths)?;
+fn build_filelist(infile_path: &Path) -> Result<(), io::Error> {
+    let infile = BufReader::new(File::open(infile_path)?);
 
-    if filelist_paths.is_empty() {
-        return Err(
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "'{filelist_dir_path}' is empty. make sure you cloned the repo with submodules"
-            )
-        )
-    }
+    let mut colliding_hashes = Vec::new();
+    let mut hashes = HashMap::new();
 
-    let mut name_hash_map = HashMap::new();
-    let mut name_hash_banlist = Vec::new();
+    for name in infile.lines().map_while(Result::ok) {
+        if name.starts_with(";") {
+            continue;
+        }
 
-    for filelist_path in filelist_paths {
-        let file = File::open(filelist_path)?;
-        let buf = BufReader::new(file);
+        let name_hash = fnv1_hash(name.to_lowercase().as_bytes()) as u32;
 
-        for line in buf.lines().map_while(Result::ok) {
-            if line.starts_with(";") {
-                continue;
-            }
-
-            let mut name_hash = hash_fnv1a64(&line.to_lowercase()) as u32;
-            if name_hash & 0xFFFF0000 == 0xFFFF0000 {
-                name_hash &= !(1 << 16);
-            }
-
-            if name_hash_banlist.contains(&name_hash) {
-                continue;
-            }
-
-            if name_hash_map.contains_key(&name_hash) {
-                name_hash_map.remove(&name_hash);
-                name_hash_banlist.push(name_hash);
-                continue;
-            }
-
-            name_hash_map.insert(name_hash, line);
+        if colliding_hashes.contains(&name_hash) {
+            continue;
+        } else if hashes.contains_key(&name_hash) {
+            hashes.remove(&name_hash);
+            colliding_hashes.push(name_hash);
+        } else {
+            let escaped_name = name.replace("\\", "\\\\");
+            hashes.insert(name_hash, format!("\"{escaped_name}\""));
         }
     }
 
     let mut phf_map = phf_codegen::Map::new();
-    for (hash, name) in name_hash_map {
-        let escaped_name = name.replace("\\", "\\\\");
-        phf_map.entry(hash, format!("\"{escaped_name}\""));
+    for (name_hash, name) in hashes {
+        phf_map.entry(name_hash, name);
     }
 
-    let out_dir_path = env::var("OUT_DIR").expect("OUT_DIR should be set by cargo during build");
-    let outfile_name = format!("{game_name}_map.rs");
-    let outfile_path = Path::new(&out_dir_path).join(outfile_name);
+    let outdir_env = env::var("OUT_DIR").expect("OUT_DIR should be set by cargo during build");
+    let outdir_path = Path::new(&outdir_env);
+
+    let outfile_stem = infile_path.file_stem().unwrap();
+    let outfile_name = format!("{}.rs", outfile_stem.display());
+
+    let outfile_path = outdir_path.join(outfile_name);
+
     let mut outfile = BufWriter::new(File::create(outfile_path)?);
+    write!(&mut outfile, "{}", phf_map.build())?;
 
-    write!(
-        &mut outfile,
-        "static {}_MAP: phf::Map<u32, &'static str> = {};",
-        game_name.to_uppercase(),
-        phf_map.build()
-    )?;
+    let collisions = colliding_hashes.len();
+    println!("built filelist {}, {collisions} collisions", infile_path.display());
 
-    let collisions = name_hash_banlist.len();
-    println!("built filelists for '{game_name}', {collisions} collisions");
-    
+    Ok(())
+}
+
+fn build_filelists_in_dir(dir_path: &Path) -> Result<(), io::Error> {
+    let filelist_paths = recurse_get_filelist_paths(dir_path)?;
+
+    for filelist_path in filelist_paths {
+        build_filelist(&filelist_path)?;
+    }
+
     Ok(())
 }
 
 fn main() -> Result<(), io::Error> {
     println!("cargo::rerun-if-changed=filelists");
-    build_filelists("wd1")?;
+    
+    build_filelists_in_dir(Path::new("filelists/wd1"))?;
 
     Ok(())
 }
