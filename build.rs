@@ -76,7 +76,12 @@ fn build_filelist(infile_path: &Path) -> Result<(), io::Error> {
     let outfile_path = outdir_path.join(outfile_name);
 
     let mut outfile = BufWriter::new(File::create(outfile_path)?);
-    write!(&mut outfile, "{}", phf_map.build())?;
+    write!(
+        &mut outfile,
+        "pub static {}_HASHES: phf::Map<u32, &'static str> = {};",
+        outfile_stem.to_ascii_uppercase().display(),
+        phf_map.build()
+    )?;
 
     let collisions = colliding_hashes.len();
     println!("built filelist {}, {collisions} collisions", infile_path.display());
