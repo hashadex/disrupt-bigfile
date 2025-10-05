@@ -135,7 +135,7 @@ impl Fat3 {
         let compression_version = (flags >> 8 & 0xFF) as u8;
 
         let entry_count = data.read_u32::<LE>()?;
-        let mut entries = Vec::new();
+        let mut entries = Vec::with_capacity(entry_count as usize);
         for _ in 0..entry_count {
             let mut entry_buf: [u8; 16] = [0; 16];
             data.read_exact(&mut entry_buf)?;
