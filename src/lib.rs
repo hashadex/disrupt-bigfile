@@ -1,3 +1,4 @@
+use std::error;
 use std::fmt;
 use std::io::{self, Read};
 
@@ -40,6 +41,8 @@ impl fmt::Display for Error {
         }
     }
 }
+
+impl error::Error for Error {}
 
 type Result<T> = std::result::Result<T, Error>;
 
