@@ -56,15 +56,15 @@ fn build_filelist(infile_path: &Path) -> Result<(), io::Error> {
                 colliding_hashes.push(name_hash);
             },
             Entry::Vacant(e) => {
-                let escaped_name = name.replace("\\", "\\\\");
-                e.insert(escaped_name);
+                e.insert(name);
             }
         }
     }
 
     let mut phf_map = phf_codegen::Map::new();
     for (name_hash, name) in hashes {
-        phf_map.entry(name_hash, name);
+        let escaped_name = name.replace("\\", "\\\\");
+        phf_map.entry(name_hash, format!("\"{escaped_name}\""));
     }
 
     let outdir_env = env::var("OUT_DIR").expect("OUT_DIR should be set by cargo during build");
