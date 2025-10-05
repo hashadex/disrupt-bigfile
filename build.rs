@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File};
@@ -47,12 +48,17 @@ fn build_filelist(infile_path: &Path) -> Result<(), io::Error> {
 
         if colliding_hashes.contains(&name_hash) {
             continue;
-        } else if hashes.contains_key(&name_hash) {
-            hashes.remove(&name_hash);
-            colliding_hashes.push(name_hash);
-        } else {
-            let escaped_name = name.replace("\\", "\\\\");
-            hashes.insert(name_hash, format!("\"{escaped_name}\""));
+        }
+        
+        match hashes.entry(name_hash) {
+            Entry::Occupied(e) => {
+                e.remove_entry();
+                colliding_hashes.push(name_hash);
+            },
+            Entry::Vacant(e) => {
+                let escaped_name = name.replace("\\", "\\\\");
+                e.insert(escaped_name);
+            }
         }
     }
 
