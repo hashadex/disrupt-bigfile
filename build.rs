@@ -54,9 +54,9 @@ fn build_filelist(infile_path: &Path, outfile: &mut impl Write) -> Result<(), io
         .unwrap(); // It's safe to unwrap at this point in the function
     let map_name = format!("{}_HASHES", infile_stem.to_ascii_uppercase().display());
 
-    write!(
+    writeln!(
         outfile,
-        "pub static {map_name}: phf::Map<u32, &'static str> = {};\n",
+        "pub static {map_name}: phf::Map<u32, &'static str> = {};",
         phf_map.build()
     )?;
 
