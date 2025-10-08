@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn fnv1_hash(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xCBF29CE484222325; // Set hash to default seed
@@ -16,7 +16,7 @@ fn fnv1_hash(bytes: &[u8]) -> u64 {
     hash
 }
 
-fn build_filelist(infile_path: &Path, outfile: &mut impl Write) -> Result<(), io::Error> {
+fn build_filelist(infile_path: &Path, outfile: &mut impl Write, map_name: &str) -> Result<(), io::Error> {
     let infile = BufReader::new(File::open(infile_path)?);
 
     let mut colliding_hashes = Vec::new();
@@ -50,13 +50,9 @@ fn build_filelist(infile_path: &Path, outfile: &mut impl Write) -> Result<(), io
         phf_map.entry(name_hash, format!("\"{escaped_name}\""));
     }
 
-    let infile_stem = infile_path.file_stem()
-        .unwrap(); // It's safe to unwrap at this point in the function
-    let map_name = format!("{}_HASHES", infile_stem.to_ascii_uppercase().display());
-
     writeln!(
         outfile,
-        "pub static {map_name}: phf::Map<u32, &'static str> = {};",
+        "pub static {map_name}: NameHashMap = {};",
         phf_map.build()
     )?;
 
@@ -67,24 +63,48 @@ fn build_filelist(infile_path: &Path, outfile: &mut impl Write) -> Result<(), io
 }
 
 fn build_filelists_for_game(game_name: &str, filelists: &[&str]) -> Result<(), String> {
-    let outdir_path = env::var("OUT_DIR").expect("OUT_DIR should be set by cargo");
-    let outfile_path = Path::new(&outdir_path).join(game_name).with_extension("rs");
+    let filelist_paths = filelists.iter().map(|&path_str| {
+        ["filelists", game_name, path_str].iter().collect::<PathBuf>()
+    });
 
-    let outfile = File::create(outfile_path)
-        .map_err(|err| format!("could not create outfile for {game_name}: {err}"))?;
-    let mut outfile_writer = BufWriter::new(outfile);
+    let outfile_path: PathBuf = [
+        env::var("OUT_DIR").expect("OUT_DIR should be set by cargo"),
+        format!("{game_name}.rs")
+    ].iter().collect();
+    let mut outfile = BufWriter::new(
+        File::create(outfile_path)
+            .map_err(|err| format!("could not create outfile for {game_name}: {err}"))?
+    );
 
-    let filelists_src_dir_path = Path::new("filelists").join(game_name);
+    let mut archive_name_map = phf_codegen::Map::new();
 
-    for &filelist_path_str in filelists {
-        let filelist_path = filelists_src_dir_path.join(filelist_path_str);
+    for filelist_path in filelist_paths {
+        let filelist_stem = filelist_path.file_stem()
+            .expect("all paths provided to this function should have a stem")
+            .to_string_lossy();
 
-        build_filelist(&filelist_path, &mut outfile_writer)
+        let map_name = filelist_stem 
+            .to_uppercase()
+            .to_string()
+            + "_HASHES";
+        
+        build_filelist(&filelist_path, &mut outfile, &map_name)
             .map_err(|err| format!(
-                "could not build filelist {}: {err}; make sure you cloned the repo with submodules",
-                filelist_path.display()
+                "could not build {}: {err}; make sure you have cloned the repo with submodules",
+                filelist_path.to_string_lossy()
             ))?;
+        
+        archive_name_map.entry(
+            filelist_stem.to_string(),
+            format!("&{map_name}")
+        );
     }
+
+    writeln!(
+        outfile,
+        "pub static ARCHIVE_NAME_MAP: phf::Map<&'static str, &'static NameHashMap> = {};",
+        archive_name_map.build()
+    ).map_err(|err| format!("failed to write archive name map: {err}"))?;
 
     Ok(())
 }
