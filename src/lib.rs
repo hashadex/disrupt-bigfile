@@ -1,3 +1,6 @@
+mod compression;
+pub mod filelists;
+
 use std::error;
 use std::fmt;
 use std::io::{self, Read};
@@ -5,9 +8,6 @@ use std::io::{self, Read};
 use compression::CompressionScheme;
 
 use byteorder::{ReadBytesExt, LE};
-
-mod compression;
-mod filelists;
 
 #[derive(Debug)]
 pub enum Error {
