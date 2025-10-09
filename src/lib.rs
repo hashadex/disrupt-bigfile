@@ -58,7 +58,7 @@ pub enum Platform {
 impl TryFrom<u8> for Platform {
     type Error = Error;
 
-    fn try_from(id: u8) -> Result<Platform> {
+    fn try_from(id: u8) -> Result<Self> {
         match id {
             0 => Ok(Platform::Any),
             2 => Ok(Platform::Xenon),
@@ -80,7 +80,7 @@ pub struct Entry {
 }
 
 impl Entry {
-    fn deserialize_v8(bytes: [u8; 16], compression_version: u8) -> Result<Entry> {
+    fn deserialize_v8(bytes: [u8; 16], compression_version: u8) -> Result<Self> {
         // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
         // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
         // oooccccc cccccccc cccccccc cccccccc
@@ -120,7 +120,7 @@ pub struct Fat3 {
 }
 
 impl Fat3 {
-    pub fn deserialize(data: &mut impl Read) -> Result<Fat3> {
+    pub fn deserialize(data: &mut impl Read) -> Result<Self> {
         let magic = data.read_u32::<LE>()?;
         if magic != FAT3_SIGNATURE {
             return Err(Error::BadMagic(magic));
