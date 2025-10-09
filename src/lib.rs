@@ -96,6 +96,16 @@ pub struct Entry {
 }
 
 impl Entry {
+    fn deserialize(
+        entry_version: EntryVersion,
+        bytes: [u8; 16],
+        compression_version: CompressionVersion
+    ) -> Result<Self> {
+        match entry_version {
+            EntryVersion::V8 => Self::deserialize_v8(bytes, compression_version)
+        }
+    }
+
     fn deserialize_v8(bytes: [u8; 16], compression_version: CompressionVersion) -> Result<Self> {
         // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
         // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
@@ -143,9 +153,6 @@ impl Fat3 {
         }
 
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
-        let entry_deserializer: fn([u8; 16], CompressionVersion) -> Result<Entry> = match entry_version {
-            EntryVersion::V8 => Entry::deserialize_v8,
-        };
 
         let flags = data.read_u32::<LE>()?;
         let platform = Platform::try_from((flags & 0xFF) as u8)?;
@@ -157,7 +164,7 @@ impl Fat3 {
             let mut entry_buf: [u8; 16] = [0; 16];
             data.read_exact(&mut entry_buf)?;
 
-            let entry = entry_deserializer(entry_buf, compression_version)?;
+            let entry = Entry::deserialize(entry_version, entry_buf, compression_version)?;
             entries.push(entry);
         }
 
