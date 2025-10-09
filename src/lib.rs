@@ -44,7 +44,7 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {}
 
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Platform {
