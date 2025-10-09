@@ -55,8 +55,10 @@ pub enum Platform {
     WiiU
 }
 
-impl Platform {
-    fn from_id(id: u8) -> Result<Platform> {
+impl TryFrom<u8> for Platform {
+    type Error = Error;
+
+    fn try_from(id: u8) -> Result<Platform> {
         match id {
             0 => Ok(Platform::Any),
             2 => Ok(Platform::Xenon),
@@ -131,7 +133,7 @@ impl Fat3 {
         }?;
 
         let flags = data.read_u32::<LE>()?;
-        let platform = Platform::from_id((flags & 0xFF) as u8)?;
+        let platform = Platform::try_from((flags & 0xFF) as u8)?;
         let compression_version = (flags >> 8 & 0xFF) as u8;
 
         let entry_count = data.read_u32::<LE>()?;
