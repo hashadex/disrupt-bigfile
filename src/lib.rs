@@ -5,7 +5,7 @@ use std::error;
 use std::fmt;
 use std::io::{self, Read};
 
-use compression::CompressionScheme;
+use compression::{CompressionScheme, CompressionVersion};
 
 use byteorder::{ReadBytesExt, LE};
 
@@ -15,8 +15,8 @@ pub enum Error {
     BadMagic(u32),
     UnsupportedEntryVersion(u32),
     UnknownPlatformId(u8),
-    UnsupportedCompressionVersion(u8),
-    UnknownCompressionScheme { compression_scheme_id: u8, compression_version: u8 }
+    UnsupportedCompressionVersion(u32),
+    UnknownCompressionScheme { compression_scheme_id: u8, compression_version: CompressionVersion }
 }
 
 impl From<io::Error> for Error {
@@ -70,6 +70,22 @@ impl TryFrom<u8> for Platform {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum EntryVersion {
+    V8
+}
+
+impl TryFrom<u32> for EntryVersion {
+    type Error = Error;
+
+    fn try_from(version: u32) -> Result<Self> {
+        match version {
+            8 => Ok(Self::V8),
+            _ => Err(Error::UnsupportedEntryVersion(version))
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Entry {
     pub name_hash: u64,
@@ -80,7 +96,7 @@ pub struct Entry {
 }
 
 impl Entry {
-    fn deserialize_v8(bytes: [u8; 16], compression_version: u8) -> Result<Self> {
+    fn deserialize_v8(bytes: [u8; 16], compression_version: CompressionVersion) -> Result<Self> {
         // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
         // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
         // oooccccc cccccccc cccccccc cccccccc
@@ -113,9 +129,9 @@ const FAT3_SIGNATURE: u32 = 0x46415433; // "FAT3"
 
 #[derive(Debug)]
 pub struct Fat3 {
-    pub entry_version: u32,
+    pub entry_version: EntryVersion,
     pub platform: Platform,
-    pub compression_version: u8,
+    pub compression_version: CompressionVersion,
     pub entries: Vec<Entry>
 }
 
@@ -126,15 +142,14 @@ impl Fat3 {
             return Err(Error::BadMagic(magic));
         }
 
-        let entry_version = data.read_u32::<LE>()?;
-        let entry_deserializer: fn([u8; 16], u8) -> Result<Entry> = match entry_version {
-            8 => Ok(Entry::deserialize_v8),
-            _ => Err(Error::UnsupportedEntryVersion(entry_version))
-        }?;
+        let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
+        let entry_deserializer: fn([u8; 16], CompressionVersion) -> Result<Entry> = match entry_version {
+            EntryVersion::V8 => Entry::deserialize_v8,
+        };
 
         let flags = data.read_u32::<LE>()?;
         let platform = Platform::try_from((flags & 0xFF) as u8)?;
-        let compression_version = (flags >> 8 & 0xFF) as u8;
+        let compression_version = CompressionVersion::try_from(flags >> 8 & 0xFF)?;
 
         let entry_count = data.read_u32::<LE>()?;
         let mut entries = Vec::with_capacity(entry_count as usize);
