@@ -72,7 +72,7 @@ impl TryFrom<u8> for Platform {
 
 #[derive(Debug)]
 pub struct Entry {
-    pub name_hash: u32,
+    pub name_hash: u64,
     pub offset: u64,
     pub compression_scheme: CompressionScheme,
     pub uncompressed_size: u32,
@@ -97,7 +97,7 @@ impl Entry {
         let c = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
         let d = u32::from_le_bytes(bytes[12..16].try_into().unwrap());
 
-        let name_hash = a;
+        let name_hash = a as u64;
         let uncompressed_size = b >> 3;
         let compression_scheme_id = (b & 7) as u8;
         let compressed_size = c & 0x1FFFFFFF;
