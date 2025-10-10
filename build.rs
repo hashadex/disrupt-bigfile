@@ -80,7 +80,7 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
     }
 
     let outfile_path = Path::new(&env::var("OUT_DIR").expect("OUT_DIR should be set by cargo"))
-        .join("name_hash_map.rs");
+        .join("hash_source_map.rs");
     let mut outfile = BufWriter::new(
         File::create(outfile_path).map_err(|err| format!("failed to create outfile: {err}"))?,
     );
