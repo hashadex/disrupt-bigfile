@@ -1,5 +1,5 @@
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
@@ -16,7 +16,11 @@ fn fnv1_hash(bytes: &[u8]) -> u64 {
     hash
 }
 
-fn build_filelist(infile_path: &Path, outfile: &mut impl Write, map_name: &str) -> Result<(), io::Error> {
+fn build_filelist(
+    infile_path: &Path,
+    outfile: &mut impl Write,
+    map_name: &str,
+) -> Result<(), io::Error> {
     let infile = BufReader::new(File::open(infile_path)?);
 
     let mut colliding_hashes = Vec::new();
@@ -32,12 +36,12 @@ fn build_filelist(infile_path: &Path, outfile: &mut impl Write, map_name: &str) 
         if colliding_hashes.contains(&name_hash) {
             continue;
         }
-        
+
         match hashes.entry(name_hash) {
             Entry::Occupied(e) => {
                 e.remove_entry();
                 colliding_hashes.push(name_hash);
-            },
+            }
             Entry::Vacant(e) => {
                 e.insert(name);
             }
@@ -57,54 +61,59 @@ fn build_filelist(infile_path: &Path, outfile: &mut impl Write, map_name: &str) 
     )?;
 
     let collisions = colliding_hashes.len();
-    println!("built filelist {}, {collisions} collisions", infile_path.display());
+    println!(
+        "built filelist {}, {collisions} collisions",
+        infile_path.display()
+    );
 
     Ok(())
 }
 
 fn build_filelists_for_game(game_name: &str, filelists: &[&str]) -> Result<(), String> {
     let filelist_paths = filelists.iter().map(|&path_str| {
-        ["filelists", game_name, path_str].iter().collect::<PathBuf>()
+        ["filelists", game_name, path_str]
+            .iter()
+            .collect::<PathBuf>()
     });
 
     let outfile_path: PathBuf = [
         env::var("OUT_DIR").expect("OUT_DIR should be set by cargo"),
-        format!("{game_name}.rs")
-    ].iter().collect();
+        format!("{game_name}.rs"),
+    ]
+    .iter()
+    .collect();
+
     let mut outfile = BufWriter::new(
         File::create(outfile_path)
-            .map_err(|err| format!("could not create outfile for {game_name}: {err}"))?
+            .map_err(|err| format!("could not create outfile for {game_name}: {err}"))?,
     );
 
     let mut archive_name_map = phf_codegen::Map::new();
 
     for filelist_path in filelist_paths {
-        let filelist_stem = filelist_path.file_stem()
+        let filelist_stem = filelist_path
+            .file_stem()
             .expect("all paths provided to this function should have a stem")
             .to_string_lossy();
 
-        let map_name = filelist_stem 
-            .to_uppercase()
-            .to_string()
-            + "_HASHES";
-        
-        build_filelist(&filelist_path, &mut outfile, &map_name)
-            .map_err(|err| format!(
+        let map_name = filelist_stem.to_uppercase().to_string() + "_HASHES";
+
+        build_filelist(&filelist_path, &mut outfile, &map_name).map_err(|err| {
+            format!(
                 "could not build {}: {err}; make sure you have cloned the repo with submodules",
                 filelist_path.to_string_lossy()
-            ))?;
-        
-        archive_name_map.entry(
-            filelist_stem.to_string(),
-            format!("&{map_name}")
-        );
+            )
+        })?;
+
+        archive_name_map.entry(filelist_stem.to_string(), format!("&{map_name}"));
     }
 
     writeln!(
         outfile,
         "pub static ARCHIVE_NAME_MAP: phf::Map<&'static str, &'static NameHashMap> = {};",
         archive_name_map.build()
-    ).map_err(|err| format!("failed to write archive name map: {err}"))?;
+    )
+    .map_err(|err| format!("failed to write archive name map: {err}"))?;
 
     Ok(())
 }
@@ -159,8 +168,8 @@ fn main() -> Result<(), String> {
             "worlds/windy_city/windy_city_italian.filelist",
             "worlds/windy_city/windy_city_japanese.filelist",
             "worlds/windy_city/windy_city_russian.filelist",
-            "worlds/windy_city/windy_city_spanish.filelist"
-        ]
+            "worlds/windy_city/windy_city_spanish.filelist",
+        ],
     )?;
 
     Ok(())

@@ -7,7 +7,7 @@ use std::io::{self, Read};
 
 use compression::{CompressionScheme, CompressionVersion};
 
-use byteorder::{ReadBytesExt, LE};
+use byteorder::{LE, ReadBytesExt};
 
 #[derive(Debug)]
 pub enum Error {
@@ -16,7 +16,10 @@ pub enum Error {
     UnsupportedEntryVersion(u32),
     UnknownPlatformId(u32),
     UnsupportedCompressionVersion(u32),
-    UnknownCompressionScheme { compression_scheme_id: u8, compression_version: CompressionVersion }
+    UnknownCompressionScheme {
+        compression_scheme_id: u8,
+        compression_version: CompressionVersion,
+    },
 }
 
 impl From<io::Error> for Error {
@@ -32,12 +35,16 @@ impl fmt::Display for Error {
             Error::BadMagic(magic) => write!(f, "bad magic {magic:X}, expected {FAT3_SIGNATURE:X}"),
             Error::UnsupportedEntryVersion(version) => write!(f, "unsupported version {version}"),
             Error::UnknownPlatformId(id) => write!(f, "unknown platform id {id}"),
-            Error::UnsupportedCompressionVersion(version) => write!(
-                f, "unsupported compression version {version} for FAT3"
+            Error::UnsupportedCompressionVersion(version) => {
+                write!(f, "unsupported compression version {version} for FAT3")
+            }
+            Error::UnknownCompressionScheme {
+                compression_scheme_id,
+                compression_version,
+            } => write!(
+                f,
+                "unknown compression scheme {compression_scheme_id} for compression_version {compression_version}"
             ),
-            Error::UnknownCompressionScheme { compression_scheme_id, compression_version } => write!(
-                f, "unknown compression scheme {compression_scheme_id} for compression_version {compression_version}"
-            )
         }
     }
 }
@@ -52,7 +59,7 @@ pub enum Platform {
     Xenon,
     PS3,
     Win64,
-    WiiU
+    WiiU,
 }
 
 impl TryFrom<u32> for Platform {
@@ -65,14 +72,14 @@ impl TryFrom<u32> for Platform {
             3 => Ok(Platform::PS3),
             4 => Ok(Platform::Win64),
             8 => Ok(Platform::WiiU),
-            _ => Err(Error::UnknownPlatformId(id))
+            _ => Err(Error::UnknownPlatformId(id)),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum EntryVersion {
-    V8
+    V8,
 }
 
 impl TryFrom<u32> for EntryVersion {
@@ -81,7 +88,7 @@ impl TryFrom<u32> for EntryVersion {
     fn try_from(version: u32) -> Result<Self> {
         match version {
             8 => Ok(Self::V8),
-            _ => Err(Error::UnsupportedEntryVersion(version))
+            _ => Err(Error::UnsupportedEntryVersion(version)),
         }
     }
 }
@@ -92,17 +99,17 @@ pub struct Entry {
     pub offset: u64,
     pub compression_scheme: CompressionScheme,
     pub uncompressed_size: u32,
-    pub compressed_size: u32
+    pub compressed_size: u32,
 }
 
 impl Entry {
     fn deserialize(
         entry_version: EntryVersion,
         bytes: [u8; 16],
-        compression_version: CompressionVersion
+        compression_version: CompressionVersion,
     ) -> Result<Self> {
         match entry_version {
-            EntryVersion::V8 => Self::deserialize_v8(bytes, compression_version)
+            EntryVersion::V8 => Self::deserialize_v8(bytes, compression_version),
         }
     }
 
@@ -138,7 +145,13 @@ impl Entry {
             uncompressed_size = compressed_size;
         }
 
-        Ok(Entry { name_hash, offset, compression_scheme, uncompressed_size, compressed_size })
+        Ok(Entry {
+            name_hash,
+            offset,
+            compression_scheme,
+            uncompressed_size,
+            compressed_size,
+        })
     }
 }
 
@@ -149,7 +162,7 @@ pub struct Fat3 {
     pub entry_version: EntryVersion,
     pub platform: Platform,
     pub compression_version: CompressionVersion,
-    pub entries: Vec<Entry>
+    pub entries: Vec<Entry>,
 }
 
 impl Fat3 {
@@ -175,14 +188,11 @@ impl Fat3 {
             entries.push(entry);
         }
 
-        Ok(
-            Fat3 {
-                entry_version,
-                platform,
-                compression_version,
-                entries
-            }
-        )
+        Ok(Fat3 {
+            entry_version,
+            platform,
+            compression_version,
+            entries,
+        })
     }
 }
-
