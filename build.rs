@@ -68,8 +68,9 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
     }
 
     println!(
-        "read {} entries total. building phf...",
-        name_hash_map.keys().len()
+        "read {} entries total; {} collisions. building phf map...",
+        name_hash_map.keys().len(),
+        colliding_hashes.len()
     );
 
     let mut phf_name_hash_map = phf_codegen::Map::new();
