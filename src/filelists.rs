@@ -1,7 +1,3 @@
-pub type NameHashMap = phf::Map<u32, &'static str>;
+pub type HashSourceMap = phf::Map<u64, &'static str>;
 
-pub mod wd1 {
-    use super::NameHashMap;
-
-    include!(concat!(env!("OUT_DIR"), "/wd1.rs"));
-}
+pub static HASH_SOURCE_MAP: HashSourceMap = include!(concat!(env!("OUT_DIR"), "/hash_source_map.rs"));
