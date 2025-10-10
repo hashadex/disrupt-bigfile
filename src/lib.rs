@@ -124,12 +124,19 @@ impl Entry {
         let d = u32::from_le_bytes(bytes[12..16].try_into().unwrap());
 
         let name_hash = a as u64;
-        let uncompressed_size = b >> 3;
+        let mut uncompressed_size = b >> 3;
         let compression_scheme_id = (b & 7) as u8;
         let compressed_size = c & 0x1FFFFFFF;
         let offset = (d << 3 | c >> 29) as u64;
 
-        let compression_scheme = CompressionScheme::from_scheme_id(compression_scheme_id, compression_version)?;
+        let compression_scheme =
+            CompressionScheme::from_scheme_id(compression_scheme_id, compression_version)?;
+        // For some reason, if the entry's compression scheme is None, the uncompressed size is set
+        // to 0, and compressed size is set to the actual size of the file. Let's set both to the
+        // same value for convinience.
+        if let CompressionScheme::None = compression_scheme {
+            uncompressed_size = compressed_size;
+        }
 
         Ok(Entry { name_hash, offset, compression_scheme, uncompressed_size, compressed_size })
     }
