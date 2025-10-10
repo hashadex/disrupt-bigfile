@@ -14,7 +14,7 @@ pub enum Error {
     IoError(io::Error),
     BadMagic(u32),
     UnsupportedEntryVersion(u32),
-    UnknownPlatformId(u8),
+    UnknownPlatformId(u32),
     UnsupportedCompressionVersion(u32),
     UnknownCompressionScheme { compression_scheme_id: u8, compression_version: CompressionVersion }
 }
@@ -55,10 +55,10 @@ pub enum Platform {
     WiiU
 }
 
-impl TryFrom<u8> for Platform {
+impl TryFrom<u32> for Platform {
     type Error = Error;
 
-    fn try_from(id: u8) -> Result<Self> {
+    fn try_from(id: u32) -> Result<Self> {
         match id {
             0 => Ok(Platform::Any),
             2 => Ok(Platform::Xenon),
@@ -155,7 +155,7 @@ impl Fat3 {
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
 
         let flags = data.read_u32::<LE>()?;
-        let platform = Platform::try_from((flags & 0xFF) as u8)?;
+        let platform = Platform::try_from(flags & 0xFF)?;
         let compression_version = CompressionVersion::try_from(flags >> 8 & 0xFF)?;
 
         let entry_count = data.read_u32::<LE>()?;
