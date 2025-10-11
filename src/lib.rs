@@ -4,6 +4,7 @@ pub mod filelists;
 use std::error;
 use std::fmt;
 use std::io::{self, Read};
+use std::path::{Path, PathBuf};
 
 use compression::{CompressionScheme, CompressionVersion};
 
@@ -152,6 +153,14 @@ impl Entry {
             uncompressed_size,
             compressed_size,
         })
+    }
+
+    pub fn path(&self) -> PathBuf {
+        if let Some(source) = filelists::HASH_SOURCE_MAP.get(&self.name_hash) {
+            Path::new(source).to_path_buf()
+        } else {
+            format!("_UNKNOWN\\{:X}", self.name_hash).into()
+        }
     }
 }
 
