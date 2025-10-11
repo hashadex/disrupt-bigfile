@@ -32,7 +32,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::IoError(error) => write!(f, "io error: {error}"),
-            Error::BadMagic(magic) => write!(f, "bad magic {magic:X}, expected {FAT3_SIGNATURE:X}"),
+            Error::BadMagic(magic) => write!(f, "bad magic 0x{magic:X}, expected 0x{FAT3_SIGNATURE:X}"),
             Error::UnsupportedEntryVersion(version) => write!(f, "unsupported version {version}"),
             Error::UnknownPlatformId(id) => write!(f, "unknown platform id {id}"),
             Error::UnsupportedCompressionVersion(version) => {
