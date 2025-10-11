@@ -39,7 +39,7 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
                 continue;
             }
 
-            let hash32 = fnv1_hash(line.to_lowercase().as_bytes()) as u32;
+            let hash32 = fnv1_hash(line.to_lowercase().as_bytes()) & 0xFFFFFFFF;
 
             if colliding_hashes.contains(&hash32) {
                 continue;
