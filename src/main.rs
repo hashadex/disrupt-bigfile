@@ -8,9 +8,7 @@ use disrupt_bigfile::{Fat3, Result};
 
 fn existing_file(source: &str) -> std::result::Result<PathBuf, String> {
     let path = Path::new(source);
-    let metadata = path
-        .metadata()
-        .map_err(|err| err.to_string())?;
+    let metadata = path.metadata().map_err(|err| err.to_string())?;
 
     if !metadata.is_file() {
         Err("is not a file".to_string())
@@ -25,15 +23,15 @@ enum Action {
     List {
         /// Path to a FAT file
         #[arg(value_parser = existing_file)]
-        fat: PathBuf
-    }
+        fat: PathBuf,
+    },
 }
 
 #[derive(Debug, Parser)]
 #[command(version)]
 struct Args {
     #[command(subcommand)]
-    action: Action
+    action: Action,
 }
 
 fn list(fat_path: PathBuf) -> Result<()> {
@@ -52,7 +50,7 @@ fn main() -> ExitCode {
     let args = Args::parse();
 
     let action_result = match args.action {
-        Action::List { fat } => list(fat)
+        Action::List { fat } => list(fat),
     };
 
     match action_result {
