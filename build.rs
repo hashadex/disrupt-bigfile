@@ -21,7 +21,7 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
         .iter()
         .map(|s| Path::new("filelists").join(s));
 
-    let mut name_hash_map = HashMap::new();
+    let mut hash_source_map = HashMap::new();
     let mut colliding_hashes = Vec::new();
 
     for filelist_path in filelist_paths {
@@ -45,7 +45,7 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
                 continue;
             }
 
-            match name_hash_map.entry(hash32) {
+            match hash_source_map.entry(hash32) {
                 Entry::Vacant(e) => {
                     e.insert(line);
                     new_entries_count += 1;
@@ -69,14 +69,14 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
 
     println!(
         "read {} entries total; {} collisions. building phf map...",
-        name_hash_map.keys().len(),
+        hash_source_map.keys().len(),
         colliding_hashes.len()
     );
 
-    let mut phf_name_hash_map = phf_codegen::Map::new();
-    for (hash, source) in name_hash_map {
+    let mut phf_hash_source_map = phf_codegen::Map::new();
+    for (hash, source) in hash_source_map {
         let escaped_source = source.replace("\\", "\\\\");
-        phf_name_hash_map.entry(hash, format!("\"{escaped_source}\""));
+        phf_hash_source_map.entry(hash, format!("\"{escaped_source}\""));
     }
 
     let outfile_path = Path::new(&env::var("OUT_DIR").expect("OUT_DIR should be set by cargo"))
@@ -85,7 +85,7 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
         File::create(outfile_path).map_err(|err| format!("failed to create outfile: {err}"))?,
     );
 
-    write!(outfile, "{}", phf_name_hash_map.build())
+    write!(outfile, "{}", phf_hash_source_map.build())
         .map_err(|err| format!("failed to write to outfile: {err}"))?;
 
     Ok(())
