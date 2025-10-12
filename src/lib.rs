@@ -4,7 +4,7 @@ pub mod filelists;
 use std::error;
 use std::fmt;
 use std::io::{self, Read};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use compression::{CompressionScheme, CompressionVersion};
 
@@ -133,11 +133,11 @@ impl Entry {
         let c = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
         let d = u32::from_le_bytes(bytes[12..16].try_into().unwrap());
 
-        let name_hash = a as u64;
+        let name_hash = u64::from(a);
         let mut uncompressed_size = b >> 3;
-        let compression_scheme_id = (b & 7) as u8;
+        let compression_scheme_id = (b & 0b111) as u8;
         let compressed_size = c & 0x1FFFFFFF;
-        let offset = (d << 3 | c >> 29) as u64;
+        let offset = u64::from(d << 3 | c >> 29);
 
         let compression_scheme =
             CompressionScheme::from_scheme_id(compression_scheme_id, compression_version)?;
@@ -159,7 +159,7 @@ impl Entry {
 
     pub fn path(&self) -> PathBuf {
         if let Some(source) = filelists::HASH_SOURCE_MAP.get(&self.name_hash) {
-            source.replace("\\", "/").into()
+            source.replace('\\', "/").into()
         } else {
             format!("_UNKNOWN/{:X}", self.name_hash).into()
         }

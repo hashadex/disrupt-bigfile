@@ -4,16 +4,16 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use disrupt_bigfile::{Fat3, Result};
+use disrupt_bigfile::{Entry, Fat3, Result};
 
 fn existing_file(source: &str) -> std::result::Result<PathBuf, String> {
     let path = Path::new(source);
     let metadata = path.metadata().map_err(|err| err.to_string())?;
 
-    if !metadata.is_file() {
-        Err("is not a file".to_string())
-    } else {
+    if metadata.is_file() {
         Ok(path.to_path_buf())
+    } else {
+        Err("is not a file".to_string())
     }
 }
 
@@ -38,9 +38,9 @@ fn list(fat_path: PathBuf) -> Result<()> {
     let mut file = BufReader::new(File::open(fat_path)?);
     let fat = Fat3::deserialize(&mut file)?;
 
-    let names = fat.entries.iter().map(|entry| entry.path());
+    let names = fat.entries.iter().map(Entry::path);
     for name in names {
-        println!("{}", name.display())
+        println!("{}", name.display());
     }
 
     Ok(())
@@ -54,7 +54,7 @@ fn main() -> ExitCode {
     };
 
     match action_result {
-        Ok(_) => ExitCode::SUCCESS,
+        Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("Error: {err}");
             ExitCode::FAILURE

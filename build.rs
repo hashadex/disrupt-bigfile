@@ -10,7 +10,7 @@ fn fnv1_hash(bytes: &[u8]) -> u64 {
 
     for &byte in bytes {
         hash = hash.wrapping_mul(0x100000001B3);
-        hash ^= byte as u64;
+        hash ^= u64::from(byte);
     }
 
     hash
@@ -35,7 +35,7 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
         let mut new_entries_count = 0;
 
         for line in file.lines().map_while(Result::ok) {
-            if line.starts_with(";") {
+            if line.starts_with(';') {
                 continue;
             }
 
@@ -58,13 +58,13 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
                         colliding_hashes.push(hash32);
                     }
                 }
-            };
+            }
         }
 
         println!(
             "read {new_entries_count} new entries from {}",
             filelist_path.display()
-        )
+        );
     }
 
     println!(
@@ -75,7 +75,7 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
 
     let mut phf_hash_source_map = phf_codegen::Map::new();
     for (hash, source) in hash_source_map {
-        let escaped_source = source.replace("\\", "\\\\");
+        let escaped_source = source.replace('\\', "\\\\");
         phf_hash_source_map.entry(hash, format!("\"{escaped_source}\""));
     }
 
