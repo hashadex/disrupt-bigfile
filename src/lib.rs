@@ -159,9 +159,9 @@ impl Entry {
 
     pub fn path(&self) -> PathBuf {
         if let Some(source) = filelists::HASH_SOURCE_MAP.get(&self.name_hash) {
-            Path::new(source).to_path_buf()
+            source.replace("\\", "/").into()
         } else {
-            format!("_UNKNOWN\\{:X}", self.name_hash).into()
+            format!("_UNKNOWN/{:X}", self.name_hash).into()
         }
     }
 }
