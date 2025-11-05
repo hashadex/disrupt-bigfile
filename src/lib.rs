@@ -1,7 +1,6 @@
 mod compression;
 pub mod filelists;
 
-use std::error;
 use std::fmt;
 use std::io::{self, Read};
 use std::path::PathBuf;
@@ -52,7 +51,7 @@ impl fmt::Display for Error {
     }
 }
 
-impl error::Error for Error {}
+impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
