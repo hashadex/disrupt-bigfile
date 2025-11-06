@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{Error, Result};
+use crate::FatError;
 
 #[derive(Clone, Copy, Debug)]
 pub enum CompressionVersion {
@@ -10,14 +10,14 @@ pub enum CompressionVersion {
 }
 
 impl TryFrom<u32> for CompressionVersion {
-    type Error = Error;
+    type Error = FatError;
 
-    fn try_from(value: u32) -> Result<Self> {
+    fn try_from(value: u32) -> Result<Self, FatError> {
         match value {
             0 => Ok(Self::V0),
             4 => Ok(Self::V4),
             5 => Ok(Self::V5),
-            _ => Err(Error::UnsupportedCompressionVersion(value)),
+            _ => Err(FatError::UnsupportedCompressionVersion(value)),
         }
     }
 }
@@ -44,11 +44,11 @@ impl CompressionScheme {
     pub fn from_scheme_id(
         compression_scheme_id: u8,
         compression_version: CompressionVersion,
-    ) -> Result<Self> {
+    ) -> Result<Self, FatError> {
         match compression_version {
             CompressionVersion::V0 => match compression_scheme_id {
                 0 => Ok(Self::None),
-                _ => Err(Error::UnknownCompressionScheme {
+                _ => Err(FatError::UnknownCompressionScheme {
                     compression_scheme_id,
                     compression_version,
                 }),
@@ -57,7 +57,7 @@ impl CompressionScheme {
                 0 => Ok(Self::None),
                 1 => Ok(Self::LZO1x),
                 2 => Ok(Self::Zlib),
-                _ => Err(Error::UnknownCompressionScheme {
+                _ => Err(FatError::UnknownCompressionScheme {
                     compression_scheme_id,
                     compression_version,
                 }),
@@ -67,7 +67,7 @@ impl CompressionScheme {
                 1 => Ok(Self::LZO1x),
                 2 => Ok(Self::Zlib),
                 3 => Ok(Self::XMemCompress),
-                _ => Err(Error::UnknownCompressionScheme {
+                _ => Err(FatError::UnknownCompressionScheme {
                     compression_scheme_id,
                     compression_version,
                 }),

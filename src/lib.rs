@@ -10,7 +10,7 @@ use compression::{CompressionScheme, CompressionVersion};
 use byteorder::{LE, ReadBytesExt};
 
 #[derive(Debug)]
-pub enum Error {
+pub enum FatError {
     IoError(io::Error),
     BadMagic(u32),
     UnsupportedEntryVersion(u32),
@@ -22,25 +22,25 @@ pub enum Error {
     },
 }
 
-impl From<io::Error> for Error {
+impl From<io::Error> for FatError {
     fn from(io_error: io::Error) -> Self {
-        Error::IoError(io_error)
+        FatError::IoError(io_error)
     }
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for FatError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::IoError(error) => write!(f, "io error: {error}"),
-            Error::BadMagic(magic) => {
+            FatError::IoError(error) => write!(f, "io error: {error}"),
+            FatError::BadMagic(magic) => {
                 write!(f, "bad magic 0x{magic:X}, expected 0x{FAT3_SIGNATURE:X}")
             }
-            Error::UnsupportedEntryVersion(version) => write!(f, "unsupported version {version}"),
-            Error::UnknownPlatformId(id) => write!(f, "unknown platform id {id}"),
-            Error::UnsupportedCompressionVersion(version) => {
+            FatError::UnsupportedEntryVersion(version) => write!(f, "unsupported version {version}"),
+            FatError::UnknownPlatformId(id) => write!(f, "unknown platform id {id}"),
+            FatError::UnsupportedCompressionVersion(version) => {
                 write!(f, "unsupported compression version {version} for FAT3")
             }
-            Error::UnknownCompressionScheme {
+            FatError::UnknownCompressionScheme {
                 compression_scheme_id,
                 compression_version,
             } => write!(
@@ -51,9 +51,7 @@ impl fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
-
-pub type Result<T> = std::result::Result<T, Error>;
+impl std::error::Error for FatError {}
 
 #[derive(Debug)]
 pub enum Platform {
@@ -65,16 +63,16 @@ pub enum Platform {
 }
 
 impl TryFrom<u32> for Platform {
-    type Error = Error;
+    type Error = FatError;
 
-    fn try_from(id: u32) -> Result<Self> {
+    fn try_from(id: u32) -> Result<Self, FatError> {
         match id {
             0 => Ok(Platform::Any),
             2 => Ok(Platform::Xenon),
             3 => Ok(Platform::PS3),
             4 => Ok(Platform::Win64),
             8 => Ok(Platform::WiiU),
-            _ => Err(Error::UnknownPlatformId(id)),
+            _ => Err(FatError::UnknownPlatformId(id)),
         }
     }
 }
@@ -85,12 +83,12 @@ pub enum EntryVersion {
 }
 
 impl TryFrom<u32> for EntryVersion {
-    type Error = Error;
+    type Error = FatError;
 
-    fn try_from(version: u32) -> Result<Self> {
+    fn try_from(version: u32) -> Result<Self, FatError> {
         match version {
             8 => Ok(Self::V8),
-            _ => Err(Error::UnsupportedEntryVersion(version)),
+            _ => Err(FatError::UnsupportedEntryVersion(version)),
         }
     }
 }
@@ -109,13 +107,13 @@ impl Entry {
         entry_version: EntryVersion,
         bytes: [u8; 16],
         compression_version: CompressionVersion,
-    ) -> Result<Self> {
+    ) -> Result<Self, FatError> {
         match entry_version {
             EntryVersion::V8 => Self::deserialize_v8(bytes, compression_version),
         }
     }
 
-    fn deserialize_v8(bytes: [u8; 16], compression_version: CompressionVersion) -> Result<Self> {
+    fn deserialize_v8(bytes: [u8; 16], compression_version: CompressionVersion) -> Result<Self, FatError> {
         // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
         // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
         // oooccccc cccccccc cccccccc cccccccc
@@ -176,10 +174,10 @@ pub struct Fat3 {
 }
 
 impl Fat3 {
-    pub fn deserialize(data: &mut impl Read) -> Result<Self> {
+    pub fn deserialize(data: &mut impl Read) -> Result<Self, FatError> {
         let magic = data.read_u32::<LE>()?;
         if magic != FAT3_SIGNATURE {
-            return Err(Error::BadMagic(magic));
+            return Err(FatError::BadMagic(magic));
         }
 
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
