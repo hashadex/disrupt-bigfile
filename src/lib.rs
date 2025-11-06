@@ -166,19 +166,16 @@ impl Entry {
 const FAT3_SIGNATURE: u32 = 0x46415433; // "FAT3"
 
 #[derive(Debug)]
-pub struct Fat3 {
+pub struct Fat {
     pub entry_version: EntryVersion,
     pub platform: Platform,
     pub compression_version: CompressionVersion,
     pub entries: Vec<Entry>,
 }
 
-impl Fat3 {
-    pub fn deserialize(data: &mut impl Read) -> Result<Self, FatError> {
-        let magic = data.read_u32::<LE>()?;
-        if magic != FAT3_SIGNATURE {
-            return Err(FatError::BadMagic(magic));
-        }
+impl Fat {
+    fn deserialize_v3(data: &mut impl Read) -> Result<Self, FatError> {
+        // Magic is already checked by deserialize()
 
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
 
@@ -196,11 +193,20 @@ impl Fat3 {
             entries.push(entry);
         }
 
-        Ok(Fat3 {
+        Ok(Fat {
             entry_version,
             platform,
             compression_version,
             entries,
         })
+    }
+
+    pub fn deserialize(data: &mut impl Read) -> Result<Self, FatError> {
+        let magic = data.read_u32::<LE>()?;
+
+        match magic {
+            FAT3_SIGNATURE => Self::deserialize_v3(data),
+            _ => Err(FatError::BadMagic(magic))
+        }
     }
 }

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use disrupt_bigfile::{Entry, Fat3, Result};
+use disrupt_bigfile::{Entry, Fat, FatError};
 
 fn existing_file(source: &str) -> std::result::Result<PathBuf, String> {
     let path = Path::new(source);
@@ -34,9 +34,9 @@ struct Args {
     action: Action,
 }
 
-fn list(fat_path: PathBuf) -> Result<()> {
+fn list(fat_path: PathBuf) -> Result<(), FatError> {
     let mut file = BufReader::new(File::open(fat_path)?);
-    let fat = Fat3::deserialize(&mut file)?;
+    let fat = Fat::deserialize(&mut file)?;
 
     let names = fat.entries.iter().map(Entry::path);
     for name in names {
