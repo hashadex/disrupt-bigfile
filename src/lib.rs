@@ -125,10 +125,12 @@ impl Entry {
         // [o] offset = 35 bits
         // [c] compressed size = 29 bits
 
-        let a = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
-        let b = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
-        let c = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
-        let d = u32::from_le_bytes(bytes[12..16].try_into().unwrap());
+        let mut bytes = &bytes[..];
+
+        let a = bytes.read_u32::<LE>()?;
+        let b = bytes.read_u32::<LE>()?;
+        let c = bytes.read_u32::<LE>()?;
+        let d = bytes.read_u32::<LE>()?;
 
         let name_hash = u64::from(a);
         let mut uncompressed_size = b >> 3;
