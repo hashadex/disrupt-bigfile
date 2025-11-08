@@ -14,9 +14,9 @@ pub enum FatError {
     IoError(io::Error),
     BadMagic(u32),
     UnsupportedEntryVersion(u32),
-    UnknownPlatformId(u32),
+    UnsupportedPlatformId(u32),
     UnsupportedCompressionVersion(u32),
-    UnknownCompressionScheme {
+    UnsupportedCompressionScheme {
         compression_scheme_id: u8,
         compression_version: CompressionVersion,
     },
@@ -36,16 +36,16 @@ impl fmt::Display for FatError {
                 write!(f, "bad magic 0x{magic:X}, expected 0x{FAT3_SIGNATURE:X}")
             }
             FatError::UnsupportedEntryVersion(version) => write!(f, "unsupported version {version}"),
-            FatError::UnknownPlatformId(id) => write!(f, "unknown platform id {id}"),
+            FatError::UnsupportedPlatformId(id) => write!(f, "unsupported platform id {id}"),
             FatError::UnsupportedCompressionVersion(version) => {
                 write!(f, "unsupported compression version {version} for FAT3")
             }
-            FatError::UnknownCompressionScheme {
+            FatError::UnsupportedCompressionScheme {
                 compression_scheme_id,
                 compression_version,
             } => write!(
                 f,
-                "unknown compression scheme {compression_scheme_id} for compression_version {compression_version}"
+                "unknown compression scheme id {compression_scheme_id} for compression version {compression_version}"
             ),
         }
     }
@@ -72,7 +72,7 @@ impl TryFrom<u32> for Platform {
             3 => Ok(Platform::PS3),
             4 => Ok(Platform::Win64),
             8 => Ok(Platform::WiiU),
-            _ => Err(FatError::UnknownPlatformId(id)),
+            _ => Err(FatError::UnsupportedPlatformId(id)),
         }
     }
 }
