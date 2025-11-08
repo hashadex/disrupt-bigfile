@@ -24,7 +24,7 @@ pub enum FatError {
 
 impl From<io::Error> for FatError {
     fn from(io_error: io::Error) -> Self {
-        FatError::IoError(io_error)
+        Self::IoError(io_error)
     }
 }
 
