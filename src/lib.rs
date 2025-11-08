@@ -31,16 +31,16 @@ impl From<io::Error> for FatError {
 impl fmt::Display for FatError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FatError::IoError(error) => write!(f, "io error: {error}"),
-            FatError::BadMagic(magic) => {
+            Self::IoError(error) => write!(f, "io error: {error}"),
+            Self::BadMagic(magic) => {
                 write!(f, "bad magic 0x{magic:X}, expected 0x{FAT3_SIGNATURE:X}")
             }
-            FatError::UnsupportedEntryVersion(version) => write!(f, "unsupported version {version}"),
-            FatError::UnsupportedPlatformId(id) => write!(f, "unsupported platform id {id}"),
-            FatError::UnsupportedCompressionVersion(version) => {
+            Self::UnsupportedEntryVersion(version) => write!(f, "unsupported version {version}"),
+            Self::UnsupportedPlatformId(id) => write!(f, "unsupported platform id {id}"),
+            Self::UnsupportedCompressionVersion(version) => {
                 write!(f, "unsupported compression version {version} for FAT3")
             }
-            FatError::UnsupportedCompressionScheme {
+            Self::UnsupportedCompressionScheme {
                 compression_scheme_id,
                 compression_version,
             } => write!(
