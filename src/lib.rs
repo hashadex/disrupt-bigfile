@@ -53,6 +53,9 @@ impl fmt::Display for FatError {
 
 impl std::error::Error for FatError {}
 
+type FatResult<T> = Result<T, FatError>;
+
+
 #[derive(Debug)]
 pub enum Platform {
     Any,
@@ -65,7 +68,7 @@ pub enum Platform {
 impl TryFrom<u32> for Platform {
     type Error = FatError;
 
-    fn try_from(id: u32) -> Result<Self, FatError> {
+    fn try_from(id: u32) -> FatResult<Self> {
         match id {
             0 => Ok(Platform::Any),
             2 => Ok(Platform::Xenon),
@@ -85,7 +88,7 @@ pub enum EntryVersion {
 impl TryFrom<u32> for EntryVersion {
     type Error = FatError;
 
-    fn try_from(version: u32) -> Result<Self, FatError> {
+    fn try_from(version: u32) -> FatResult<Self> {
         match version {
             8 => Ok(Self::V8),
             _ => Err(FatError::UnsupportedEntryVersion(version)),
@@ -107,13 +110,13 @@ impl Entry {
         entry_version: EntryVersion,
         bytes: [u8; 16],
         compression_version: CompressionVersion,
-    ) -> Result<Self, FatError> {
+    ) -> FatResult<Self> {
         match entry_version {
             EntryVersion::V8 => Self::deserialize_v8(bytes, compression_version),
         }
     }
 
-    fn deserialize_v8(bytes: [u8; 16], compression_version: CompressionVersion) -> Result<Self, FatError> {
+    fn deserialize_v8(bytes: [u8; 16], compression_version: CompressionVersion) -> FatResult<Self> {
         // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
         // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
         // oooccccc cccccccc cccccccc cccccccc
@@ -176,7 +179,7 @@ pub struct Fat {
 }
 
 impl Fat {
-    fn deserialize_v3(data: &mut impl Read) -> Result<Self, FatError> {
+    fn deserialize_v3(data: &mut impl Read) -> FatResult<Self> {
         // Magic is already checked by deserialize()
 
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
@@ -203,7 +206,7 @@ impl Fat {
         })
     }
 
-    pub fn deserialize(data: &mut impl Read) -> Result<Self, FatError> {
+    pub fn deserialize(data: &mut impl Read) -> FatResult<Self> {
         let magic = data.read_u32::<LE>()?;
 
         match magic {

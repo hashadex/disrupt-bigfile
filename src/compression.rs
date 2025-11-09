@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::FatError;
+use crate::{FatError, FatResult};
 
 #[derive(Clone, Copy, Debug)]
 pub enum CompressionVersion {
@@ -12,7 +12,7 @@ pub enum CompressionVersion {
 impl TryFrom<u32> for CompressionVersion {
     type Error = FatError;
 
-    fn try_from(value: u32) -> Result<Self, FatError> {
+    fn try_from(value: u32) -> FatResult<Self> {
         match value {
             0 => Ok(Self::V0),
             4 => Ok(Self::V4),
