@@ -52,7 +52,7 @@ impl CompressionScheme {
             (CompressionVersion::V5, 3) => Ok(Self::XMemCompress),
             _ => Err(FatError::UnsupportedCompressionScheme {
                 compression_scheme_id,
-                compression_version
+                compression_version,
             }),
         }
     }

@@ -193,7 +193,7 @@ impl Entry {
     pub fn write_decompressed(
         &self,
         dat: &mut (impl Read + Seek),
-        output: &mut impl Write
+        output: &mut impl Write,
     ) -> UnpackResult<u64> {
         dat.seek(SeekFrom::Start(self.offset))?;
         let mut raw_entry_data = dat.take(self.compressed_size.into());
@@ -207,10 +207,14 @@ impl Entry {
                 } else {
                     Err(io::Error::new(
                         ErrorKind::UnexpectedEof,
-                        format!("dat was too small: expected to copy {0}, but copied {copied}", self.compressed_size)
-                    ).into())
+                        format!(
+                            "dat was too small: expected to copy {0} bytes, but copied {copied}",
+                            self.compressed_size
+                        ),
+                    )
+                    .into())
                 }
-            },
+            }
             CompressionScheme::LZO1x => todo!(),
             CompressionScheme::Zlib => todo!(),
             CompressionScheme::XMemCompress => todo!(),
@@ -220,7 +224,7 @@ impl Entry {
     pub fn unpack_to_file(
         &self,
         dat: &mut (impl Read + Seek),
-        destination_file_path: &Path
+        destination_file_path: &Path,
     ) -> UnpackResult<u64> {
         let mut file = File::create(destination_file_path)?;
 
@@ -230,7 +234,7 @@ impl Entry {
     pub fn unpack_to_dir(
         &self,
         dat: &mut (impl Read + Seek),
-        destination_dir: &Path
+        destination_dir: &Path,
     ) -> UnpackResult<u64> {
         fs::create_dir_all(destination_dir)?;
 
@@ -283,7 +287,7 @@ impl Fat {
 
         match magic {
             FAT3_SIGNATURE => Self::deserialize_v3(data),
-            _ => Err(FatError::BadMagic(magic))
+            _ => Err(FatError::BadMagic(magic)),
         }
     }
 }
