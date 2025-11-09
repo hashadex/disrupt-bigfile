@@ -70,11 +70,11 @@ impl TryFrom<u32> for Platform {
 
     fn try_from(id: u32) -> FatResult<Self> {
         match id {
-            0 => Ok(Platform::Any),
-            2 => Ok(Platform::Xenon),
-            3 => Ok(Platform::PS3),
-            4 => Ok(Platform::Win64),
-            8 => Ok(Platform::WiiU),
+            0 => Ok(Self::Any),
+            2 => Ok(Self::Xenon),
+            3 => Ok(Self::PS3),
+            4 => Ok(Self::Win64),
+            8 => Ok(Self::WiiU),
             _ => Err(FatError::UnsupportedPlatformId(id)),
         }
     }
