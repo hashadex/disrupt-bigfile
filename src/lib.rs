@@ -290,4 +290,16 @@ impl Fat {
             _ => Err(FatError::BadMagic(magic)),
         }
     }
+
+    pub fn unpack_all_to_dir(
+        &self,
+        dat: &mut (impl Read + Seek),
+        destination_dir: &Path,
+    ) -> UnpackResult<()> {
+        for entry in &self.entries {
+            entry.unpack_to_dir(dat, destination_dir)?;
+        }
+
+        Ok(())
+    }
 }
