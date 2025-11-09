@@ -1,11 +1,11 @@
 mod compression;
-pub mod filelists;
+mod filelists;
 
 use std::fmt;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-use compression::{CompressionScheme, CompressionVersion};
+pub use compression::{CompressionScheme, CompressionVersion};
 
 use byteorder::{LE, ReadBytesExt};
 
