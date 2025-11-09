@@ -45,33 +45,22 @@ impl CompressionScheme {
         compression_scheme_id: u8,
         compression_version: CompressionVersion,
     ) -> Result<Self, FatError> {
-        match compression_version {
-            CompressionVersion::V0 => match compression_scheme_id {
-                0 => Ok(Self::None),
-                _ => Err(FatError::UnsupportedCompressionScheme {
-                    compression_scheme_id,
-                    compression_version,
-                }),
-            },
-            CompressionVersion::V4 => match compression_scheme_id {
-                0 => Ok(Self::None),
-                1 => Ok(Self::LZO1x),
-                2 => Ok(Self::Zlib),
-                _ => Err(FatError::UnsupportedCompressionScheme {
-                    compression_scheme_id,
-                    compression_version,
-                }),
-            },
-            CompressionVersion::V5 => match compression_scheme_id {
-                0 => Ok(Self::None),
-                1 => Ok(Self::LZO1x),
-                2 => Ok(Self::Zlib),
-                3 => Ok(Self::XMemCompress),
-                _ => Err(FatError::UnsupportedCompressionScheme {
-                    compression_scheme_id,
-                    compression_version,
-                }),
-            },
+        match (compression_version, compression_scheme_id) {
+            (CompressionVersion::V0, 0) => Ok(Self::None),
+
+            (CompressionVersion::V4, 0) => Ok(Self::None),
+            (CompressionVersion::V4, 1) => Ok(Self::LZO1x),
+            (CompressionVersion::V4, 2) => Ok(Self::Zlib),
+
+            (CompressionVersion::V5, 0) => Ok(Self::None),
+            (CompressionVersion::V5, 1) => Ok(Self::LZO1x),
+            (CompressionVersion::V5, 2) => Ok(Self::Zlib),
+            (CompressionVersion::V5, 3) => Ok(Self::XMemCompress),
+
+            _ => Err(FatError::UnsupportedCompressionScheme {
+                compression_scheme_id,
+                compression_version
+            }),
         }
     }
 }
