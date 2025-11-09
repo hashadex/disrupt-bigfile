@@ -2,8 +2,9 @@ mod compression;
 mod filelists;
 
 use std::fmt;
-use std::io::{self, Read};
-use std::path::PathBuf;
+use std::fs::{self, File};
+use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 
 pub use compression::{CompressionScheme, CompressionVersion};
 
@@ -55,6 +56,28 @@ impl std::error::Error for FatError {}
 
 type FatResult<T> = Result<T, FatError>;
 
+#[derive(Debug)]
+pub enum UnpackError {
+    IoError(io::Error),
+}
+
+impl From<io::Error> for UnpackError {
+    fn from(io_error: io::Error) -> Self {
+        Self::IoError(io_error)
+    }
+}
+
+impl fmt::Display for UnpackError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IoError(error) => write!(f, "io error: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for UnpackError {}
+
+type UnpackResult<T> = Result<T, UnpackError>;
 
 #[derive(Debug)]
 pub enum Platform {
@@ -165,6 +188,55 @@ impl Entry {
         } else {
             format!("_UNKNOWN/{:X}", self.name_hash).into()
         }
+    }
+
+    pub fn write_decompressed(
+        &self,
+        dat: &mut (impl Read + Seek),
+        output: &mut impl Write
+    ) -> UnpackResult<u64> {
+        dat.seek(SeekFrom::Start(self.offset))?;
+        let mut raw_entry_data = dat.take(self.compressed_size.into());
+
+        match self.compression_scheme {
+            CompressionScheme::None => {
+                let copied = io::copy(&mut raw_entry_data, output)?;
+
+                if copied == self.uncompressed_size.into() {
+                    Ok(copied)
+                } else {
+                    Err(io::Error::new(
+                        ErrorKind::UnexpectedEof,
+                        format!("dat was too small: expected to copy {0}, but copied {copied}", self.compressed_size)
+                    ).into())
+                }
+            },
+            CompressionScheme::LZO1x => todo!(),
+            CompressionScheme::Zlib => todo!(),
+            CompressionScheme::XMemCompress => todo!(),
+        }
+    }
+
+    pub fn unpack_to_file(
+        &self,
+        dat: &mut (impl Read + Seek),
+        destination_file_path: &Path
+    ) -> UnpackResult<u64> {
+        let mut file = File::create(destination_file_path)?;
+
+        self.write_decompressed(dat, &mut file)
+    }
+
+    pub fn unpack_to_dir(
+        &self,
+        dat: &mut (impl Read + Seek),
+        destination_dir: &Path
+    ) -> UnpackResult<u64> {
+        fs::create_dir_all(destination_dir)?;
+
+        let output_path: PathBuf = [destination_dir, &self.path()].iter().collect();
+
+        self.unpack_to_file(dat, &output_path)
     }
 }
 
