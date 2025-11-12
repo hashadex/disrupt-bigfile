@@ -40,6 +40,17 @@ pub enum CompressionScheme {
     XMemCompress,
 }
 
+impl fmt::Display for CompressionScheme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::None => write!(f, "no compression"),
+            Self::LZO1x => write!(f, "LZO1x"),
+            Self::Zlib => write!(f, "Zlib"),
+            Self::XMemCompress => write!(f, "XMemCompress"),
+        }
+    }
+}
+
 impl CompressionScheme {
     pub fn from_scheme_id(
         compression_scheme_id: u8,

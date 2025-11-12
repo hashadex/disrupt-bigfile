@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use disrupt_bigfile::{Entry, Fat, FatError};
+use disrupt_bigfile::{Fat, FatError};
 
 fn existing_file(source: &str) -> std::result::Result<PathBuf, String> {
     let path = Path::new(source);
@@ -24,6 +24,10 @@ enum Action {
         /// Path to a FAT file
         #[arg(value_parser = existing_file)]
         fat: PathBuf,
+
+        /// Print out compressed size, compression scheme and offset alongside entry filename
+        #[arg(short, long)]
+        verbose: bool,
     },
 }
 
@@ -34,13 +38,22 @@ struct Args {
     action: Action,
 }
 
-fn list(fat_path: PathBuf) -> Result<(), FatError> {
+fn list(fat_path: PathBuf, verbose: bool) -> Result<(), FatError> {
     let mut file = BufReader::new(File::open(fat_path)?);
     let fat = Fat::deserialize(&mut file)?;
 
-    let names = fat.entries.iter().map(Entry::path);
-    for name in names {
-        println!("{}", name.display());
+    for entry in fat.entries {
+        if verbose {
+            println!(
+                "{}B {} @ 0x{:X}: {}",
+                entry.compressed_size,
+                entry.compression_scheme,
+                entry.offset,
+                entry.path().display(),
+            );
+        } else {
+            println!("{}", entry.path().display());
+        }
     }
 
     Ok(())
@@ -50,7 +63,7 @@ fn main() -> ExitCode {
     let args = Args::parse();
 
     let action_result = match args.action {
-        Action::List { fat } => list(fat),
+        Action::List { fat, verbose } => list(fat, verbose),
     };
 
     match action_result {
