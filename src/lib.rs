@@ -32,12 +32,12 @@ impl From<io::Error> for FatError {
 impl fmt::Display for FatError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::IoError(error) => write!(f, "io error: {error}"),
+            Self::IoError(error) => write!(f, "io error while reading FAT: {error}"),
             Self::BadMagic(magic) => {
-                write!(f, "bad magic 0x{magic:X}, expected 0x{FAT3_SIGNATURE:X}")
+                write!(f, "bad magic 0x{magic:X} in FAT, expected 0x{FAT3_SIGNATURE:X}")
             }
-            Self::UnsupportedEntryVersion(version) => write!(f, "unsupported version {version}"),
-            Self::UnsupportedPlatformId(id) => write!(f, "unsupported platform id {id}"),
+            Self::UnsupportedEntryVersion(version) => write!(f, "unsupported entry version {version} in FAT"),
+            Self::UnsupportedPlatformId(id) => write!(f, "unsupported platform id {id} in FAT"),
             Self::UnsupportedCompressionVersion(version) => {
                 write!(f, "unsupported compression version {version} for FAT3")
             }
@@ -46,7 +46,7 @@ impl fmt::Display for FatError {
                 compression_version,
             } => write!(
                 f,
-                "unknown compression scheme id {compression_scheme_id} for compression version {compression_version}"
+                "unknown compression scheme id {compression_scheme_id} for compression version {compression_version} in FAT"
             ),
         }
     }
@@ -208,7 +208,7 @@ impl Entry {
                     Err(io::Error::new(
                         ErrorKind::UnexpectedEof,
                         format!(
-                            "dat was too small: expected to copy {0} bytes, but copied {copied}",
+                            "DAT was too small: expected to copy {0} bytes, but copied {copied}",
                             self.compressed_size
                         ),
                     )
