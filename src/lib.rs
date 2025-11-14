@@ -208,7 +208,7 @@ impl Entry {
                     Err(io::Error::new(
                         ErrorKind::UnexpectedEof,
                         format!(
-                            "DAT was too small: expected to copy {0} bytes, but copied {copied}",
+                            "DAT was too small: expected to copy {} bytes, but copied {copied}",
                             self.compressed_size
                         ),
                     )
