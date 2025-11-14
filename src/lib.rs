@@ -236,7 +236,14 @@ impl Entry {
         dat: &mut (impl Read + Seek),
         destination_dir: &Path,
     ) -> DecompressionResult<u64> {
+        fs::create_dir_all(destination_dir)?;
+
         let output_path: PathBuf = [destination_dir, &self.path()].iter().collect();
+        let output_path_parent = output_path.parent().expect("output_path should always have a parent");
+
+        if !output_path_parent.try_exists()? {
+            fs::create_dir_all(output_path_parent)?;
+        }
 
         self.unpack_to_file(dat, &output_path)
     }
