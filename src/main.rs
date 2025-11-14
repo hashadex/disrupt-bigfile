@@ -38,9 +38,9 @@ struct Args {
     action: Action,
 }
 
-fn list(fat_path: PathBuf, verbose: bool) -> Result<(), FatError> {
-    let mut file = BufReader::new(File::open(fat_path)?);
-    let fat = Fat::deserialize(&mut file)?;
+fn list(fat_path: PathBuf, verbose: bool) -> Result<(), Box<dyn Error>> {
+    let mut fat_file = BufReader::new(File::open(fat_path)?);
+    let fat = Fat::deserialize(&mut fat_file)?;
 
     for entry in fat.entries {
         if verbose {
@@ -62,7 +62,7 @@ fn list(fat_path: PathBuf, verbose: bool) -> Result<(), FatError> {
 fn main() -> ExitCode {
     let args = Args::parse();
 
-    let action_result = match args.action {
+    let action_result: Result<(), Box<dyn Error>> = match args.action {
         Action::List { fat, verbose } => list(fat, verbose),
     };
 
