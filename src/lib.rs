@@ -6,7 +6,9 @@ use std::fs::{self, File};
 use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-pub use compression::{CompressionScheme, CompressionVersion};
+pub use compression::{
+    CompressionScheme, CompressionVersion, DecompressionError, DecompressionResult,
+};
 
 use byteorder::{LE, ReadBytesExt};
 
@@ -34,9 +36,14 @@ impl fmt::Display for FatError {
         match self {
             Self::IoError(error) => write!(f, "io error while reading FAT: {error}"),
             Self::BadMagic(magic) => {
-                write!(f, "bad magic 0x{magic:X} in FAT, expected 0x{FAT3_SIGNATURE:X}")
+                write!(
+                    f,
+                    "bad magic 0x{magic:X} in FAT, expected 0x{FAT3_SIGNATURE:X}"
+                )
             }
-            Self::UnsupportedEntryVersion(version) => write!(f, "unsupported entry version {version} in FAT"),
+            Self::UnsupportedEntryVersion(version) => {
+                write!(f, "unsupported entry version {version} in FAT")
+            }
             Self::UnsupportedPlatformId(id) => write!(f, "unsupported platform id {id} in FAT"),
             Self::UnsupportedCompressionVersion(version) => {
                 write!(f, "unsupported compression version {version} for FAT3")
@@ -55,29 +62,6 @@ impl fmt::Display for FatError {
 impl std::error::Error for FatError {}
 
 type FatResult<T> = Result<T, FatError>;
-
-#[derive(Debug)]
-pub enum DecompressionError {
-    IoError(io::Error),
-}
-
-impl From<io::Error> for DecompressionError {
-    fn from(io_error: io::Error) -> Self {
-        Self::IoError(io_error)
-    }
-}
-
-impl fmt::Display for DecompressionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::IoError(error) => write!(f, "io error: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for DecompressionError {}
-
-type DecompressionResult<T> = Result<T, DecompressionError>;
 
 #[derive(Debug)]
 pub enum Platform {
@@ -194,7 +178,7 @@ impl Entry {
         &self,
         dat: &mut (impl Read + Seek),
         output: &mut impl Write,
-    ) -> DecompressionResult<u64> {
+    ) -> DecompressionResult<()> {
         dat.seek(SeekFrom::Start(self.offset))?;
         let mut raw_entry_data = dat.take(self.compressed_size.into());
 
@@ -203,7 +187,7 @@ impl Entry {
                 let copied = io::copy(&mut raw_entry_data, output)?;
 
                 if copied == self.uncompressed_size.into() {
-                    Ok(copied)
+                    Ok(())
                 } else {
                     Err(io::Error::new(
                         ErrorKind::UnexpectedEof,
@@ -217,7 +201,10 @@ impl Entry {
             }
             CompressionScheme::LZO1x => todo!(),
             CompressionScheme::Zlib => todo!(),
-            CompressionScheme::XMemCompress => todo!(),
+            CompressionScheme::XMemCompress => {
+                compression::decompress_xmemcompress(&mut raw_entry_data, output)
+                    .map_err(|error| DecompressionError::XMemCompressError(error))
+            }
         }
     }
 
@@ -225,7 +212,7 @@ impl Entry {
         &self,
         dat: &mut (impl Read + Seek),
         destination_file_path: &Path,
-    ) -> DecompressionResult<u64> {
+    ) -> DecompressionResult<()> {
         let mut file = File::create(destination_file_path)?;
 
         self.write_decompressed(dat, &mut file)
@@ -235,11 +222,13 @@ impl Entry {
         &self,
         dat: &mut (impl Read + Seek),
         destination_dir: &Path,
-    ) -> DecompressionResult<u64> {
+    ) -> DecompressionResult<()> {
         fs::create_dir_all(destination_dir)?;
 
         let output_path: PathBuf = [destination_dir, &self.path()].iter().collect();
-        let output_path_parent = output_path.parent().expect("output_path should always have a parent");
+        let output_path_parent = output_path
+            .parent()
+            .expect("output_path should always have a parent");
 
         if !output_path_parent.try_exists()? {
             fs::create_dir_all(output_path_parent)?;
