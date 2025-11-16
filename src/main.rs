@@ -92,9 +92,9 @@ fn unpack(
         );
         dat_path_guess
     });
-    // Using a BufReader here will not help since decompression functions seek the file and read in
-    // large chunks.
-    let mut dat_file = File::open(dat_path).map_err(|err| format!("failed to open DAT: {err}"))?;
+
+    let mut dat_file =
+        BufReader::new(File::open(dat_path).map_err(|err| format!("failed to open DAT: {err}"))?);
 
     for entry in fat.entries.iter().progress() {
         entry

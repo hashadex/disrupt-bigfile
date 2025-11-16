@@ -73,6 +73,13 @@ impl CompressionScheme {
     }
 }
 
+const XMEMCOMPRESS_LZXNATIVE_SIGNATURE: u32 = 0x0FF512EE;
+const XMEMCOMPRESS_VERSION: u16 = 0x0103;
+const XMEMCOMPRESS_RESERVED: u16 = 0x0;
+const XMEMCOMPRESS_CONTEXT_FLAGS: u32 = 0x0;
+const XMEMCOMPRESS_FLAGS: u32 = 0x0;
+const XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE: u32 = 32768;
+
 #[derive(Debug)]
 pub enum XMemCompressError {
     IoError(io::Error),
@@ -81,20 +88,14 @@ pub enum XMemCompressError {
     UnexpectedReserved(u16),
     UnknownContextFlags(u32),
     UnknownFlags(u32),
-    UnexpectedWindowSize(u32),
+    UnsupportedWindowSize(u32),
     UnexpectedCompressionPartitionSize(u32),
-    LzxdError(lzxd::DecompressError),
+    LzxdError(u64, lzxd::DecompressError),
 }
 
 impl From<io::Error> for XMemCompressError {
     fn from(io_error: io::Error) -> Self {
         Self::IoError(io_error)
-    }
-}
-
-impl From<lzxd::DecompressError> for XMemCompressError {
-    fn from(lzxd_error: lzxd::DecompressError) -> Self {
-        Self::LzxdError(lzxd_error)
     }
 }
 
@@ -122,29 +123,21 @@ impl fmt::Display for XMemCompressError {
                 f,
                 "unknown flags 0x{flags:X}, expected 0x{XMEMCOMPRESS_FLAGS:X}"
             ),
-            Self::UnexpectedWindowSize(size) => write!(
-                f,
-                "unexpected window size {size}, expected {XMEMCOMPRESS_EXPECTED_WINDOW_SIZE}"
-            ),
+            Self::UnsupportedWindowSize(size) => {
+                write!(f, "window size {size} is unsupported by lzxd")
+            }
             Self::UnexpectedCompressionPartitionSize(part_size) => write!(
                 f,
                 "unexpected compression partition size {part_size}, expected {XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE}"
             ),
-            Self::LzxdError(error) => write!(f, "lzxd error: {error}"),
+            Self::LzxdError(chunk_num, error) => {
+                write!(f, "lzxd error on chunk #{chunk_num}: {error}")
+            }
         }
     }
 }
 
 impl std::error::Error for XMemCompressError {}
-
-const XMEMCOMPRESS_LZXNATIVE_SIGNATURE: u32 = 0x0FF512EE;
-const XMEMCOMPRESS_VERSION: u16 = 0x0103;
-const XMEMCOMPRESS_RESERVED: u16 = 0x0;
-const XMEMCOMPRESS_CONTEXT_FLAGS: u32 = 0x0;
-const XMEMCOMPRESS_FLAGS: u32 = 0x0;
-const XMEMCOMPRESS_EXPECTED_WINDOW_SIZE: u32 = 32768; // 32 KiB
-const XMEMCOMPRESS_LZXD_WINDOW_SIZE: WindowSize = WindowSize::KB32;
-const XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE: u32 = 32768;
 
 pub fn decompress_xmemcompress(
     compressed_data: &mut (impl Read + Seek),
@@ -176,9 +169,19 @@ pub fn decompress_xmemcompress(
     }
 
     let window_size = compressed_data.read_u32::<BE>()?;
-    if window_size != XMEMCOMPRESS_EXPECTED_WINDOW_SIZE {
-        return Err(XMemCompressError::UnexpectedWindowSize(window_size));
-    }
+    let window_size = match window_size {
+        32_768 => WindowSize::KB32,
+        65_536 => WindowSize::KB64,
+        137_072 => WindowSize::KB128,
+        262_144 => WindowSize::KB256,
+        1_048_576 => WindowSize::MB1,
+        2_097_152 => WindowSize::MB2,
+        4_194_304 => WindowSize::MB4,
+        8_388_608 => WindowSize::MB8,
+        16_777_216 => WindowSize::MB16,
+        33_554_432 => WindowSize::MB32,
+        _ => return Err(XMemCompressError::UnsupportedWindowSize(window_size)),
+    };
 
     let compression_partition_size = compressed_data.read_u32::<BE>()?;
     if compression_partition_size != XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE {
@@ -187,40 +190,65 @@ pub fn decompress_xmemcompress(
         ));
     }
 
-    compressed_data.seek_relative(4)?; // Skip uncompressed_size_high
+    let uncompressed_file_size = compressed_data.read_u64::<BE>()?;
 
-    let uncompressed_size_low = compressed_data.read_u32::<BE>()?;
-
-    // Skip compressed_size_high, compressed_size_low, uncompressed_block_size,
-    // compressed_block_size
+    // Skip u64 compressed_file_size, u32 largest_uncompressed_chunk_size,
+    // u32 largest_compressed_chunk_size
     compressed_data.seek_relative(16)?;
 
-    let mut lzxd_context = Lzxd::new(XMEMCOMPRESS_LZXD_WINDOW_SIZE);
+    let expected_chunk_count = uncompressed_file_size.div_ceil(compression_partition_size.into());
+    for chunk_num in 0..expected_chunk_count {
+        // Each chunk in the 0F F5 12 EE format has two headers: external and internal.
+        //
+        // 1. External header:
+        //    * Contains the total size (including the internal header) of the chunk that follows
+        //      as a u32.
+        // 2. Internal header:
+        //    * Begins with an optional 0xFF prefix.
+        //    * If 0xFF is present, the next 2 bytes store the chunk’s uncompressed size
+        //      (usually 32 KiB). If 0xFF is absent, the uncompressed size implicitly defaults to
+        //      32 KiB.
+        //    * After the optional uncompressed-size field, the internal header *also* stores the
+        //      compressed length of the chunk, for some odd reason.
+        //
+        // The compressed length in the internal header is always 10 bytes smaller than the
+        // length from the external header. This is because the internal length value excludes:
+        //    * the 5-byte internal header itself, and
+        //    * the 5 trailing 0x00 bytes after each chunk.
+        //
+        // We will ignore the internal header's length here.
 
-    let expected_block_count =
-        uncompressed_size_low.div_ceil(XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE);
-    for block_num in 0..expected_block_count {
-        let compressed_block_size = compressed_data.read_u32::<BE>()?;
-        let mut compressed_block_buf = vec![0; compressed_block_size.try_into().unwrap()];
+        let chunk_size = compressed_data.read_u32::<BE>()?;
 
-        compressed_data.read_exact(&mut compressed_block_buf)?;
+        let uncompressed_chunk_size;
+        let internal_header_size;
+        if compressed_data.read_u8()? == 0xFF {
+            uncompressed_chunk_size = compressed_data.read_u16::<BE>()?;
+            internal_header_size = 5;
 
-        let uncompressed_block_size = if block_num != expected_block_count - 1 {
-            // This is not the last block, so it's size is
-            // XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE (32 KiB)
-            XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE
+            compressed_data.seek_relative(2)?;
         } else {
-            // This is the last block, which means it may be less than
-            // XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE (32 KiB)
-            uncompressed_size_low - block_num * XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE
-        };
+            uncompressed_chunk_size = 32_768;
+            internal_header_size = 2;
 
-        let decompressed_block = lzxd_context.decompress_next(
-            &compressed_block_buf,
-            uncompressed_block_size.try_into().unwrap(),
-        )?;
+            compressed_data.seek_relative(1)?;
+        }
 
-        out_buf.write_all(decompressed_block)?;
+        let chunk_buf_size: usize = (chunk_size - internal_header_size)
+            .try_into()
+            .expect("u32 should fit into usize on PCs");
+        let mut compressed_chunk_buf = vec![0; chunk_buf_size];
+
+        compressed_data.read_exact(&mut compressed_chunk_buf)?;
+
+        // Strangely enough, we have to use a different context for each chunk, or else the
+        // decompression will fail on the second chunk.
+        let mut lzxd_context = Lzxd::new(window_size);
+        let decompressed_chunk_buf = lzxd_context
+            .decompress_next(&compressed_chunk_buf, uncompressed_chunk_size.into())
+            .map_err(|err| XMemCompressError::LzxdError(chunk_num, err))?;
+
+        out_buf.write_all(decompressed_chunk_buf)?;
     }
 
     out_buf.flush()?;
