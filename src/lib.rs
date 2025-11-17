@@ -223,8 +223,6 @@ impl Entry {
         dat: &mut (impl Read + Seek),
         destination_dir: &Path,
     ) -> DecompressionResult<()> {
-        fs::create_dir_all(destination_dir)?;
-
         let output_path: PathBuf = [destination_dir, &self.path()].iter().collect();
         let output_path_parent = output_path
             .parent()
