@@ -203,7 +203,7 @@ impl Entry {
             CompressionScheme::Zlib => todo!(),
             CompressionScheme::XMemCompress => {
                 compression::decompress_xmemcompress(&mut raw_entry_data, output)
-                    .map_err(|error| DecompressionError::XMemCompressError(error))
+                    .map_err(DecompressionError::XMemCompressError)
             }
         }
     }
