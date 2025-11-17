@@ -9,7 +9,7 @@ use indicatif::ProgressIterator;
 
 use disrupt_bigfile::Fat;
 
-fn existing_file(source: &str) -> std::result::Result<PathBuf, String> {
+fn existing_file(source: &str) -> Result<PathBuf, String> {
     let path = Path::new(source);
     let metadata = path.metadata().map_err(|err| err.to_string())?;
 
