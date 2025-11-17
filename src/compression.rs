@@ -216,7 +216,7 @@ pub fn decompress_xmemcompress(
         //    * the 5-byte internal header itself, and
         //    * the 5 trailing 0x00 bytes after each chunk.
         //
-        // We will ignore the internal header's length here.
+        // We will ignore the size from the internal header here to keep the alignment to chunks.
 
         let chunk_size = compressed_data.read_u32::<BE>()?;
 
