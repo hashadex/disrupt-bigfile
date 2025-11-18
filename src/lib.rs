@@ -17,8 +17,10 @@ pub enum FatError {
     IoError(io::Error),
     BadMagic(u32),
     UnsupportedEntryVersion(u32),
-    UnsupportedPlatformId(u32),
-    UnsupportedCompressionVersion(u32),
+    UnsupportedPlatformId(u8),
+    UnsupportedCompressionVersion(u8),
+    UnsupportedNameHashVersion(u8),
+    UnexpectedPaddingByte(u8),
     UnsupportedCompressionScheme {
         compression_scheme_id: u8,
         compression_version: CompressionVersion,
@@ -36,10 +38,7 @@ impl fmt::Display for FatError {
         match self {
             Self::IoError(error) => write!(f, "io error while reading FAT: {error}"),
             Self::BadMagic(magic) => {
-                write!(
-                    f,
-                    "bad magic 0x{magic:X} in FAT, expected 0x{FAT3_SIGNATURE:X}"
-                )
+                write!(f, "bad magic 0x{magic:X} in FAT, expected 0x{FAT3_SIGNATURE:X}")
             }
             Self::UnsupportedEntryVersion(version) => {
                 write!(f, "unsupported entry version {version} in FAT")
@@ -48,6 +47,13 @@ impl fmt::Display for FatError {
             Self::UnsupportedCompressionVersion(version) => {
                 write!(f, "unsupported compression version {version} for FAT3")
             }
+            Self::UnsupportedNameHashVersion(version) => {
+                write!(f, "unsupported name hash version {version}")
+            }
+            Self::UnexpectedPaddingByte(byte) => write!(
+                f,
+                "unexpected byte 0x{byte:X} in padding between flags and entry count in FAT, expected 0x00"
+            ),
             Self::UnsupportedCompressionScheme {
                 compression_scheme_id,
                 compression_version,
@@ -72,10 +78,10 @@ pub enum Platform {
     WiiU,
 }
 
-impl TryFrom<u32> for Platform {
+impl TryFrom<u8> for Platform {
     type Error = FatError;
 
-    fn try_from(id: u32) -> FatResult<Self> {
+    fn try_from(id: u8) -> FatResult<Self> {
         match id {
             0 => Ok(Self::Any),
             2 => Ok(Self::Xenon),
@@ -99,6 +105,26 @@ impl TryFrom<u32> for EntryVersion {
         match version {
             8 => Ok(Self::V8),
             _ => Err(FatError::UnsupportedEntryVersion(version)),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum NameHashVersion {
+    V50,
+    V55,
+    V58
+}
+
+impl TryFrom<u8> for NameHashVersion {
+    type Error = FatError;
+
+    fn try_from(version: u8) -> FatResult<Self> {
+        match version {
+            50 => Ok(Self::V50),
+            55 => Ok(Self::V55),
+            58 => Ok(Self::V58),
+            _ => Err(FatError::UnsupportedNameHashVersion(version)),
         }
     }
 }
@@ -243,6 +269,7 @@ pub struct Fat {
     pub entry_version: EntryVersion,
     pub platform: Platform,
     pub compression_version: CompressionVersion,
+    pub name_hash_version: NameHashVersion,
     pub entries: Vec<Entry>,
 }
 
@@ -252,9 +279,13 @@ impl Fat {
 
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
 
-        let flags = data.read_u32::<LE>()?;
-        let platform = Platform::try_from(flags & 0xFF)?;
-        let compression_version = CompressionVersion::try_from(flags >> 8 & 0xFF)?;
+        let platform = Platform::try_from(data.read_u8()?)?;
+        let compression_version = CompressionVersion::try_from(data.read_u8()?)?;
+        let name_hash_version = NameHashVersion::try_from(data.read_u8()?)?;
+        let padding = data.read_u8()?;
+        if padding != 0 {
+            return Err(FatError::UnexpectedPaddingByte(padding));
+        }
 
         let entry_count = data.read_u32::<LE>()?;
         let mut entries = Vec::with_capacity(entry_count as usize);
@@ -270,6 +301,7 @@ impl Fat {
             entry_version,
             platform,
             compression_version,
+            name_hash_version,
             entries,
         })
     }
@@ -295,3 +327,13 @@ impl Fat {
         Ok(())
     }
 }
+
+// pub struct ArchiveBuilder<D: Write> {
+//     fat: Fat,
+//     dat: D,
+//     dat_position: u64,
+// }
+
+// impl<D: Write> ArchiveBuilder<D> {
+    
+// }

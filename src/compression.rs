@@ -13,10 +13,10 @@ pub enum CompressionVersion {
     V5,
 }
 
-impl TryFrom<u32> for CompressionVersion {
+impl TryFrom<u8> for CompressionVersion {
     type Error = FatError;
 
-    fn try_from(value: u32) -> FatResult<Self> {
+    fn try_from(value: u8) -> FatResult<Self> {
         match value {
             0 => Ok(Self::V0),
             4 => Ok(Self::V4),
