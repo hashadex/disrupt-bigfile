@@ -69,6 +69,22 @@ impl std::error::Error for FatError {}
 
 type FatResult<T> = Result<T, FatError>;
 
+#[derive(Clone, Copy, Debug)]
+pub enum EntryVersion {
+    V8,
+}
+
+impl TryFrom<u32> for EntryVersion {
+    type Error = FatError;
+
+    fn try_from(version: u32) -> FatResult<Self> {
+        match version {
+            8 => Ok(Self::V8),
+            _ => Err(FatError::UnsupportedEntryVersion(version)),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Platform {
     Any,
@@ -89,22 +105,6 @@ impl TryFrom<u8> for Platform {
             4 => Ok(Self::Win64),
             8 => Ok(Self::WiiU),
             _ => Err(FatError::UnsupportedPlatformId(id)),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum EntryVersion {
-    V8,
-}
-
-impl TryFrom<u32> for EntryVersion {
-    type Error = FatError;
-
-    fn try_from(version: u32) -> FatResult<Self> {
-        match version {
-            8 => Ok(Self::V8),
-            _ => Err(FatError::UnsupportedEntryVersion(version)),
         }
     }
 }
