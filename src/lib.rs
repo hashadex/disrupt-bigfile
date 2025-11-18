@@ -6,11 +6,11 @@ use std::fs::{self, File};
 use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
+use byteorder::{LE, ReadBytesExt};
+
 pub use compression::{
     CompressionScheme, CompressionVersion, DecompressionError, DecompressionResult,
 };
-
-use byteorder::{LE, ReadBytesExt};
 
 #[derive(Debug)]
 pub enum FatError {
