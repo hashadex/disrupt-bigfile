@@ -196,7 +196,7 @@ impl Entry {
         if let Some(source) = filelists::HASH_SOURCE_MAP.get(&self.name_hash) {
             source.replace('\\', "/").into()
         } else {
-            format!("_UNKNOWN/{:X}", self.name_hash).into()
+            format!("__UNKNOWN/{:X}", self.name_hash).into()
         }
     }
 
