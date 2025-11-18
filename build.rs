@@ -75,8 +75,8 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
 
     let mut phf_hash_source_map = phf_codegen::Map::new();
     for (hash, source) in hash_source_map {
-        let escaped_source = source.replace('\\', "\\\\");
-        phf_hash_source_map.entry(hash, format!("\"{escaped_source}\""));
+        let unix_separator_source = source.replace('\\', "/");
+        phf_hash_source_map.entry(hash, format!("\"{unix_separator_source}\""));
     }
 
     let outfile_path = Path::new(&env::var("OUT_DIR").expect("OUT_DIR should be set by cargo"))

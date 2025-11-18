@@ -38,7 +38,10 @@ impl fmt::Display for FatError {
         match self {
             Self::IoError(error) => write!(f, "io error while reading FAT: {error}"),
             Self::BadMagic(magic) => {
-                write!(f, "bad magic 0x{magic:X} in FAT, expected 0x{FAT3_SIGNATURE:X}")
+                write!(
+                    f,
+                    "bad magic 0x{magic:X} in FAT, expected 0x{FAT3_SIGNATURE:X}"
+                )
             }
             Self::UnsupportedEntryVersion(version) => {
                 write!(f, "unsupported entry version {version} in FAT")
@@ -113,7 +116,7 @@ impl TryFrom<u8> for Platform {
 pub enum NameHashVersion {
     V50,
     V55,
-    V58
+    V58,
 }
 
 impl TryFrom<u8> for NameHashVersion {
@@ -194,7 +197,7 @@ impl Entry {
 
     pub fn path(&self) -> PathBuf {
         if let Some(source) = filelists::HASH_SOURCE_MAP.get(&self.name_hash) {
-            source.replace('\\', "/").into()
+            source.into()
         } else {
             format!("__UNKNOWN/{:X}", self.name_hash).into()
         }
@@ -335,5 +338,5 @@ impl Fat {
 // }
 
 // impl<D: Write> ArchiveBuilder<D> {
-    
+
 // }
