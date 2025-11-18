@@ -73,6 +73,11 @@ impl std::error::Error for FatError {}
 type FatResult<T> = Result<T, FatError>;
 
 #[derive(Clone, Copy, Debug)]
+pub enum FatVersion {
+    Fat3,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum EntryVersion {
     V8,
 }
@@ -269,6 +274,7 @@ const FAT3_SIGNATURE: u32 = 0x46415433; // "FAT3"
 
 #[derive(Debug)]
 pub struct Fat {
+    pub fat_version: FatVersion,
     pub entry_version: EntryVersion,
     pub platform: Platform,
     pub compression_version: CompressionVersion,
@@ -301,6 +307,7 @@ impl Fat {
         }
 
         Ok(Fat {
+            fat_version: FatVersion::Fat3,
             entry_version,
             platform,
             compression_version,
