@@ -3,141 +3,144 @@ mod filelists;
 
 use std::fmt;
 use std::fs::{self, File};
-use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom, Take, Write};
 use std::path::{Path, PathBuf};
 
 use byteorder::{LE, ReadBytesExt};
 
-pub use compression::{
-    CompressionScheme, CompressionVersion, DecompressionError, DecompressionResult,
-};
+pub use compression::{CompressionScheme, CompressionVersion, XMemCompressError};
+
+const FAT3_MAGIC: u32 = 0x46415433;
 
 #[derive(Debug)]
-pub enum FatError {
-    IoError(io::Error),
+pub enum FatDeserializationError {
+    Io(io::Error),
     BadMagic(u32),
-    UnsupportedEntryVersion(u32),
-    UnsupportedPlatformId(u8),
-    UnsupportedCompressionVersion(u8),
-    UnsupportedNameHashVersion(u8),
+    UnknownEntryVersion(u32),
+    UnknownPlatformId(u8),
+    UnknownCompressionVersion(u8),
+    UnknownNameHashVersion(u8),
     UnexpectedPaddingByte(u8),
-    UnsupportedCompressionScheme {
-        compression_scheme_id: u8,
+    UnknownCompressionScheme {
+        scheme_id: u8,
         compression_version: CompressionVersion,
     },
 }
 
-impl From<io::Error> for FatError {
-    fn from(io_error: io::Error) -> Self {
-        Self::IoError(io_error)
+impl From<io::Error> for FatDeserializationError {
+    fn from(err: io::Error) -> Self {
+        FatDeserializationError::Io(err)
     }
 }
 
-impl fmt::Display for FatError {
+impl fmt::Display for FatDeserializationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::IoError(error) => write!(f, "io error while reading FAT: {error}"),
-            Self::BadMagic(magic) => {
-                write!(
-                    f,
-                    "bad magic 0x{magic:X} in FAT, expected 0x{FAT3_SIGNATURE:X}"
-                )
+            FatDeserializationError::Io(err) => write!(f, "io error: {err}"),
+            FatDeserializationError::BadMagic(magic) => {
+                write!(f, "bad magic 0x{magic:X}, expected 0x{FAT3_MAGIC:X}")
             }
-            Self::UnsupportedEntryVersion(version) => {
-                write!(f, "unsupported entry version {version} in FAT")
+            FatDeserializationError::UnknownEntryVersion(version) => {
+                write!(f, "unknown entry version {version}")
             }
-            Self::UnsupportedPlatformId(id) => write!(f, "unsupported platform id {id} in FAT"),
-            Self::UnsupportedCompressionVersion(version) => {
-                write!(f, "unsupported compression version {version} for FAT3")
+            FatDeserializationError::UnknownPlatformId(id) => write!(f, "unknown platform id {id}"),
+            FatDeserializationError::UnknownCompressionVersion(version) => {
+                write!(f, "unknown compression version {version}")
             }
-            Self::UnsupportedNameHashVersion(version) => {
-                write!(f, "unsupported name hash version {version}")
+            FatDeserializationError::UnknownNameHashVersion(version) => {
+                write!(f, "unknown name hash version {version}")
             }
-            Self::UnexpectedPaddingByte(byte) => write!(
-                f,
-                "unexpected byte 0x{byte:X} in padding between flags and entry count in FAT, expected 0x00"
-            ),
-            Self::UnsupportedCompressionScheme {
-                compression_scheme_id,
+            FatDeserializationError::UnexpectedPaddingByte(byte) => {
+                write!(f, "unexpected padding byte 0x{byte:X}, expected 0x00")
+            }
+            FatDeserializationError::UnknownCompressionScheme {
+                scheme_id,
                 compression_version,
             } => write!(
                 f,
-                "unknown compression scheme id {compression_scheme_id} for compression version {compression_version} in FAT"
+                "unknown compression scheme id {scheme_id} for compression version {compression_version}"
             ),
         }
     }
 }
 
-impl std::error::Error for FatError {}
+impl std::error::Error for FatDeserializationError {}
 
-type FatResult<T> = Result<T, FatError>;
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FatVersion {
     Fat3,
 }
 
-#[derive(Clone, Copy, Debug)]
+impl TryFrom<u32> for FatVersion {
+    type Error = FatDeserializationError;
+
+    fn try_from(magic: u32) -> Result<Self, Self::Error> {
+        match magic {
+            FAT3_MAGIC => Ok(Self::Fat3),
+            _ => Err(Self::Error::BadMagic(magic)),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EntryVersion {
     V8,
 }
 
 impl TryFrom<u32> for EntryVersion {
-    type Error = FatError;
+    type Error = FatDeserializationError;
 
-    fn try_from(version: u32) -> FatResult<Self> {
+    fn try_from(version: u32) -> Result<Self, Self::Error> {
         match version {
             8 => Ok(Self::V8),
-            _ => Err(FatError::UnsupportedEntryVersion(version)),
+            _ => Err(Self::Error::UnknownEntryVersion(version)),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Platform {
     Any,
+    Win32,
     Xenon,
-    PS3,
+    Ps3,
     Win64,
     WiiU,
 }
 
 impl TryFrom<u8> for Platform {
-    type Error = FatError;
+    type Error = FatDeserializationError;
 
-    fn try_from(id: u8) -> FatResult<Self> {
+    fn try_from(id: u8) -> Result<Self, Self::Error> {
         match id {
             0 => Ok(Self::Any),
+            1 => Ok(Self::Win32),
             2 => Ok(Self::Xenon),
-            3 => Ok(Self::PS3),
+            3 => Ok(Self::Ps3),
             4 => Ok(Self::Win64),
             8 => Ok(Self::WiiU),
-            _ => Err(FatError::UnsupportedPlatformId(id)),
+            _ => Err(Self::Error::UnknownPlatformId(id)),
         }
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NameHashVersion {
     V50,
-    V55,
-    V58,
 }
 
 impl TryFrom<u8> for NameHashVersion {
-    type Error = FatError;
+    type Error = FatDeserializationError;
 
-    fn try_from(version: u8) -> FatResult<Self> {
+    fn try_from(version: u8) -> Result<Self, Self::Error> {
         match version {
             50 => Ok(Self::V50),
-            55 => Ok(Self::V55),
-            58 => Ok(Self::V58),
-            _ => Err(FatError::UnsupportedNameHashVersion(version)),
+            _ => Err(Self::Error::UnknownNameHashVersion(version)),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Entry {
     pub name_hash: u64,
     pub offset: u64,
@@ -147,17 +150,10 @@ pub struct Entry {
 }
 
 impl Entry {
-    fn deserialize(
-        entry_version: EntryVersion,
-        bytes: [u8; 16],
+    fn deserialize_v8(
+        mut data: impl Read,
         compression_version: CompressionVersion,
-    ) -> FatResult<Self> {
-        match entry_version {
-            EntryVersion::V8 => Self::deserialize_v8(bytes, compression_version),
-        }
-    }
-
-    fn deserialize_v8(bytes: [u8; 16], compression_version: CompressionVersion) -> FatResult<Self> {
+    ) -> Result<Self, FatDeserializationError> {
         // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
         // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
         // oooccccc cccccccc cccccccc cccccccc
@@ -169,29 +165,29 @@ impl Entry {
         // [o] offset = 35 bits
         // [c] compressed size = 29 bits
 
-        let mut bytes = &bytes[..];
-
-        let a = bytes.read_u32::<LE>()?;
-        let b = bytes.read_u32::<LE>()?;
-        let c = bytes.read_u32::<LE>()?;
-        let d = bytes.read_u32::<LE>()?;
+        let a = data.read_u32::<LE>()?;
+        let b = data.read_u32::<LE>()?;
+        let c = data.read_u32::<LE>()?;
+        let d = data.read_u32::<LE>()?;
 
         let name_hash = u64::from(a);
         let mut uncompressed_size = b >> 3;
-        let compression_scheme_id = (b & 0b111) as u8;
+        let compression_scheme_id =
+            u8::try_from(b & 0b111).expect("b & 0b111 should always fit into u8");
+        let offset = (u64::from(d) << 3) | u64::from(c >> 29);
         let compressed_size = c & 0x1FFFFFFF;
-        let offset = u64::from(d << 3 | c >> 29);
 
         let compression_scheme =
             CompressionScheme::from_scheme_id(compression_scheme_id, compression_version)?;
-        // For some reason, if the entry's compression scheme is None, the uncompressed size is set
-        // to 0, and compressed size is set to the actual size of the file. Let's set both to the
-        // same value for convinience.
-        if let CompressionScheme::None = compression_scheme {
+
+        // For some reason, if the entry's compression scheme is None, uncompressed size is set to
+        // 0 and compressed size is set to the size of the entry. Let's set both to the same value
+        // for convinience.
+        if compression_scheme == CompressionScheme::None {
             uncompressed_size = compressed_size;
         }
 
-        Ok(Entry {
+        Ok(Self {
             name_hash,
             offset,
             compression_scheme,
@@ -200,79 +196,38 @@ impl Entry {
         })
     }
 
+    pub fn deserialize(
+        data: impl Read,
+        entry_version: EntryVersion,
+        compression_version: CompressionVersion,
+    ) -> Result<Self, FatDeserializationError> {
+        match entry_version {
+            EntryVersion::V8 => Self::deserialize_v8(data, compression_version),
+        }
+    }
+
     pub fn path(&self) -> PathBuf {
-        if let Some(source) = filelists::HASH_SOURCE_MAP.get(&self.name_hash) {
-            source.into()
-        } else {
-            format!("__UNKNOWN/{:X}", self.name_hash).into()
-        }
-    }
-
-    pub fn write_decompressed(
-        &self,
-        dat: &mut (impl Read + Seek),
-        output: &mut impl Write,
-    ) -> DecompressionResult<()> {
-        dat.seek(SeekFrom::Start(self.offset))?;
-        let mut raw_entry_data = dat.take(self.compressed_size.into());
-
-        match self.compression_scheme {
-            CompressionScheme::None => {
-                let copied = io::copy(&mut raw_entry_data, output)?;
-
-                if copied == self.uncompressed_size.into() {
-                    Ok(())
-                } else {
-                    Err(io::Error::new(
-                        ErrorKind::UnexpectedEof,
-                        format!(
-                            "DAT was too small: expected to copy {} bytes, but copied {copied}",
-                            self.compressed_size
-                        ),
-                    )
-                    .into())
-                }
-            }
-            CompressionScheme::LZO1x => todo!(),
-            CompressionScheme::Zlib => todo!(),
-            CompressionScheme::XMemCompress => {
-                compression::decompress_xmemcompress(&mut raw_entry_data, output)
-                    .map_err(DecompressionError::XMemCompressError)
-            }
-        }
-    }
-
-    pub fn unpack_to_file(
-        &self,
-        dat: &mut (impl Read + Seek),
-        destination_file_path: &Path,
-    ) -> DecompressionResult<()> {
-        let mut file = File::create(destination_file_path)?;
-
-        self.write_decompressed(dat, &mut file)
-    }
-
-    pub fn unpack_to_dir(
-        &self,
-        dat: &mut (impl Read + Seek),
-        destination_dir: &Path,
-    ) -> DecompressionResult<()> {
-        let output_path: PathBuf = [destination_dir, &self.path()].iter().collect();
-        let output_path_parent = output_path
-            .parent()
-            .expect("output_path should always have a parent");
-
-        if !output_path_parent.try_exists()? {
-            fs::create_dir_all(output_path_parent)?;
-        }
-
-        self.unpack_to_file(dat, &output_path)
+        filelists::HASH_SOURCE_MAP.get(&self.name_hash).map_or_else(
+            || format!("__UNKNOWN/{:X}", self.name_hash).into(),
+            PathBuf::from,
+        )
     }
 }
 
-const FAT3_SIGNATURE: u32 = 0x46415433; // "FAT3"
+impl fmt::Display for Entry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}B {} @ 0x{:X}: {}",
+            self.compressed_size,
+            self.compression_scheme,
+            self.offset,
+            self.path().display()
+        )
+    }
+}
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fat {
     pub fat_version: FatVersion,
     pub entry_version: EntryVersion,
@@ -283,31 +238,31 @@ pub struct Fat {
 }
 
 impl Fat {
-    fn deserialize_v3(data: &mut impl Read) -> FatResult<Self> {
-        // Magic is already checked by deserialize()
-
+    pub fn deserialize(mut data: impl Read) -> Result<Fat, FatDeserializationError> {
+        let fat_version = FatVersion::try_from(data.read_u32::<LE>()?)?;
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
 
         let platform = Platform::try_from(data.read_u8()?)?;
         let compression_version = CompressionVersion::try_from(data.read_u8()?)?;
         let name_hash_version = NameHashVersion::try_from(data.read_u8()?)?;
-        let padding = data.read_u8()?;
-        if padding != 0 {
-            return Err(FatError::UnexpectedPaddingByte(padding));
+        let padding_byte = data.read_u8()?;
+        if padding_byte != 0x00 {
+            return Err(FatDeserializationError::UnexpectedPaddingByte(padding_byte));
         }
 
         let entry_count = data.read_u32::<LE>()?;
-        let mut entries = Vec::with_capacity(entry_count as usize);
+        let mut entries = Vec::with_capacity(
+            entry_count
+                .try_into()
+                .expect("u32 should fit into usize on PCs"),
+        );
         for _ in 0..entry_count {
-            let mut entry_buf: [u8; 16] = [0; 16];
-            data.read_exact(&mut entry_buf)?;
-
-            let entry = Entry::deserialize(entry_version, entry_buf, compression_version)?;
+            let entry = Entry::deserialize(&mut data, entry_version, compression_version)?;
             entries.push(entry);
         }
 
-        Ok(Fat {
-            fat_version: FatVersion::Fat3,
+        Ok(Self {
+            fat_version,
             entry_version,
             platform,
             compression_version,
@@ -316,34 +271,119 @@ impl Fat {
         })
     }
 
-    pub fn deserialize(data: &mut impl Read) -> FatResult<Self> {
-        let magic = data.read_u32::<LE>()?;
-
-        match magic {
-            FAT3_SIGNATURE => Self::deserialize_v3(data),
-            _ => Err(FatError::BadMagic(magic)),
-        }
-    }
-
-    pub fn unpack_all_to_dir(
-        &self,
-        dat: &mut (impl Read + Seek),
-        destination_dir: &Path,
-    ) -> DecompressionResult<()> {
-        for entry in &self.entries {
-            entry.unpack_to_dir(dat, destination_dir)?;
-        }
-
-        Ok(())
+    pub fn open(path: impl AsRef<Path>) -> Result<Fat, FatDeserializationError> {
+        let file = BufReader::new(File::open(path)?);
+        Self::deserialize(file)
     }
 }
 
-// pub struct ArchiveBuilder<D: Write> {
-//     fat: Fat,
-//     dat: D,
-//     dat_position: u64,
-// }
+#[derive(Debug)]
+pub enum UnpackError {
+    Io(io::Error),
+    XMemCompress(XMemCompressError),
+}
 
-// impl<D: Write> ArchiveBuilder<D> {
+impl From<io::Error> for UnpackError {
+    fn from(err: io::Error) -> Self {
+        Self::Io(err)
+    }
+}
 
-// }
+impl From<XMemCompressError> for UnpackError {
+    fn from(err: XMemCompressError) -> Self {
+        Self::XMemCompress(err)
+    }
+}
+
+impl fmt::Display for UnpackError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "io error: {err}"),
+            Self::XMemCompress(err) => write!(f, "XMemCompress error: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for UnpackError {}
+
+pub struct Dat<R: Read + Seek> {
+    inner: R,
+}
+
+impl<R: Read + Seek> Dat<R> {
+    pub fn new(inner: R) -> Self {
+        Self { inner }
+    }
+
+    pub fn into_inner(self) -> R {
+        self.inner
+    }
+
+    pub fn raw_entry_data(&mut self, entry: Entry) -> Result<Take<&mut R>, UnpackError> {
+        self.inner.seek(SeekFrom::Start(entry.offset))?;
+        Ok((&mut self.inner).take(entry.compressed_size.into()))
+    }
+
+    pub fn write_decompressed(
+        &mut self,
+        entry: Entry,
+        mut out: impl Write,
+    ) -> Result<(), UnpackError> {
+        let mut raw_data = self.raw_entry_data(entry)?;
+
+        match entry.compression_scheme {
+            CompressionScheme::None => {
+                let copied = io::copy(&mut raw_data, &mut out)?;
+
+                if copied == entry.uncompressed_size.into() {
+                    Ok(())
+                } else {
+                    Err(io::Error::new(
+                        ErrorKind::UnexpectedEof,
+                        format!(
+                            "unexpected EOF: expected to copy {} bytes, but copied {copied}",
+                            entry.uncompressed_size
+                        ),
+                    )
+                    .into())
+                }
+            }
+            CompressionScheme::LZO1x => todo!(),
+            CompressionScheme::Zlib => todo!(),
+            CompressionScheme::XMemCompress => {
+                compression::decompress_xmemcompress(raw_data, &mut out)
+                    .map_err(XMemCompressError::into)
+            }
+        }
+    }
+
+    pub fn unpack_to_file(
+        &mut self,
+        entry: Entry,
+        dest: impl AsRef<Path>,
+    ) -> Result<(), UnpackError> {
+        // BufWriter will not help here because decompression functions write in big chunks
+        let outfile = File::create(dest)?;
+        self.write_decompressed(entry, outfile)
+    }
+
+    pub fn unpack_to_dir(
+        &mut self,
+        entry: Entry,
+        archive_root_dir: impl AsRef<Path>,
+    ) -> Result<(), UnpackError> {
+        let dest: PathBuf = [archive_root_dir.as_ref(), &entry.path()].iter().collect();
+
+        let dest_dir = dest.parent().expect("dest should always have a parent");
+        fs::create_dir_all(dest_dir)?;
+
+        self.unpack_to_file(entry, dest)
+    }
+}
+
+impl Dat<BufReader<File>> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let file = BufReader::new(File::open(path)?);
+        Ok(Self { inner: file })
+    }
+}

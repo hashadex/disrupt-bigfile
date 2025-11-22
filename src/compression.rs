@@ -4,9 +4,9 @@ use std::io::{self, Read, Seek, Write};
 use byteorder::{BE, ReadBytesExt};
 use lzxd::{self, Lzxd, WindowSize};
 
-use crate::{FatError, FatResult};
+use crate::FatDeserializationError;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CompressionVersion {
     V0,
     V4,
@@ -14,14 +14,14 @@ pub enum CompressionVersion {
 }
 
 impl TryFrom<u8> for CompressionVersion {
-    type Error = FatError;
+    type Error = FatDeserializationError;
 
-    fn try_from(value: u8) -> FatResult<Self> {
+    fn try_from(value: u8) -> Result<Self, FatDeserializationError> {
         match value {
             0 => Ok(Self::V0),
             4 => Ok(Self::V4),
             5 => Ok(Self::V5),
-            _ => Err(FatError::UnsupportedCompressionVersion(value)),
+            _ => Err(Self::Error::UnknownCompressionVersion(value)),
         }
     }
 }
@@ -36,7 +36,7 @@ impl fmt::Display for CompressionVersion {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CompressionScheme {
     None,
     LZO1x,
@@ -57,16 +57,16 @@ impl fmt::Display for CompressionScheme {
 
 impl CompressionScheme {
     pub fn from_scheme_id(
-        compression_scheme_id: u8,
+        scheme_id: u8,
         compression_version: CompressionVersion,
-    ) -> FatResult<Self> {
-        match (compression_version, compression_scheme_id) {
+    ) -> Result<Self, FatDeserializationError> {
+        match (compression_version, scheme_id) {
             (_, 0) => Ok(Self::None),
             (CompressionVersion::V4 | CompressionVersion::V5, 1) => Ok(Self::LZO1x),
             (CompressionVersion::V4 | CompressionVersion::V5, 2) => Ok(Self::Zlib),
             (CompressionVersion::V5, 3) => Ok(Self::XMemCompress),
-            _ => Err(FatError::UnsupportedCompressionScheme {
-                compression_scheme_id,
+            _ => Err(FatDeserializationError::UnknownCompressionScheme {
+                scheme_id,
                 compression_version,
             }),
         }
@@ -140,8 +140,8 @@ impl fmt::Display for XMemCompressError {
 impl std::error::Error for XMemCompressError {}
 
 pub fn decompress_xmemcompress(
-    compressed_data: &mut (impl Read + Seek),
-    out_buf: &mut impl Write,
+    mut compressed_data: impl Read + Seek,
+    mut out_buf: impl Write,
 ) -> Result<(), XMemCompressError> {
     let magic = compressed_data.read_u32::<BE>()?;
     if magic != XMEMCOMPRESS_LZXNATIVE_SIGNATURE {
@@ -255,28 +255,3 @@ pub fn decompress_xmemcompress(
 
     Ok(())
 }
-
-#[derive(Debug)]
-pub enum DecompressionError {
-    IoError(io::Error),
-    XMemCompressError(XMemCompressError),
-}
-
-impl From<io::Error> for DecompressionError {
-    fn from(io_error: io::Error) -> Self {
-        Self::IoError(io_error)
-    }
-}
-
-impl fmt::Display for DecompressionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::IoError(error) => write!(f, "io error: {error}"),
-            Self::XMemCompressError(error) => write!(f, "XMemCompress error: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for DecompressionError {}
-
-pub type DecompressionResult<T> = Result<T, DecompressionError>;

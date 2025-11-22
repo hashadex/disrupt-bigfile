@@ -1,13 +1,12 @@
 use std::error::Error;
-use std::fs::File;
-use std::io::BufReader;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use indicatif::ProgressIterator;
 
-use disrupt_bigfile::Fat;
+use disrupt_bigfile::{Dat, Fat};
 
 fn existing_file(source: &str) -> Result<PathBuf, String> {
     let path = Path::new(source);
@@ -56,20 +55,14 @@ struct Args {
 }
 
 fn list(fat_path: PathBuf, verbose: bool) -> Result<(), Box<dyn Error>> {
-    let mut fat_file = BufReader::new(File::open(fat_path)?);
-    let fat = Fat::deserialize(&mut fat_file)?;
+    let fat = Fat::open(fat_path)?;
 
+    let mut lock = io::stdout().lock();
     for entry in fat.entries {
         if verbose {
-            println!(
-                "{}B {} @ 0x{:X}: {}",
-                entry.compressed_size,
-                entry.compression_scheme,
-                entry.offset,
-                entry.path().display(),
-            );
+            writeln!(lock, "{entry}")?;
         } else {
-            println!("{}", entry.path().display());
+            writeln!(lock, "{}", entry.path().display())?;
         }
     }
 
@@ -81,25 +74,23 @@ fn unpack(
     dat_path: Option<PathBuf>,
     out_dir: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    let mut fat_file = BufReader::new(File::open(&fat_path)?);
-    let fat = Fat::deserialize(&mut fat_file)?;
-
     let dat_path = dat_path.unwrap_or_else(|| {
         let dat_path_guess = fat_path.with_extension("dat");
+
         eprintln!(
-            "Warning: no DAT path given. Assuming it's '{}'.",
+            "Warning: no DAT path given. Assuming it's {}...",
             dat_path_guess.display()
         );
+
         dat_path_guess
     });
 
-    let mut dat_file =
-        BufReader::new(File::open(dat_path).map_err(|err| format!("failed to open DAT: {err}"))?);
+    let fat = Fat::open(fat_path)?;
+    let mut dat = Dat::open(dat_path)?;
 
     for entry in fat.entries.iter().progress() {
-        entry
-            .unpack_to_dir(&mut dat_file, &out_dir)
-            .map_err(|err| format!("failed to unpack '{}': {err}", entry.path().display()))?;
+        dat.unpack_to_dir(*entry, &out_dir)
+            .map_err(|err| format!("failed to unpack {}: {err}", entry.path().display()))?;
     }
 
     Ok(())
