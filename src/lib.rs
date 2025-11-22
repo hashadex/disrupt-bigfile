@@ -141,6 +141,23 @@ impl TryFrom<u8> for NameHashVersion {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FatMetadata {
+    pub fat_version: FatVersion,
+    pub entry_version: EntryVersion,
+    pub platform: Platform,
+    pub compression_version: CompressionVersion,
+    pub name_hash_version: NameHashVersion,
+}
+
+pub const WD1_WIN64_METADATA: FatMetadata = FatMetadata {
+    fat_version: FatVersion::Fat3,
+    entry_version: EntryVersion::V8,
+    platform: Platform::Win64,
+    compression_version: CompressionVersion::V5,
+    name_hash_version: NameHashVersion::V50,
+};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Entry {
     pub name_hash: u64,
     pub offset: u64,
@@ -229,11 +246,7 @@ impl fmt::Display for Entry {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fat {
-    pub fat_version: FatVersion,
-    pub entry_version: EntryVersion,
-    pub platform: Platform,
-    pub compression_version: CompressionVersion,
-    pub name_hash_version: NameHashVersion,
+    pub metadata: FatMetadata,
     pub entries: Vec<Entry>,
 }
 
@@ -262,13 +275,22 @@ impl Fat {
         }
 
         Ok(Self {
+            metadata: FatMetadata {
             fat_version,
             entry_version,
             platform,
             compression_version,
             name_hash_version,
+            },
             entries,
         })
+    }
+
+    pub fn new(metadata: FatMetadata) -> Self {
+        Self {
+            metadata,
+            entries: Vec::new(),
+        }
     }
 
     pub fn open(path: impl AsRef<Path>) -> Result<Fat, FatDeserializationError> {
