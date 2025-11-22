@@ -82,6 +82,14 @@ impl TryFrom<u32> for FatVersion {
     }
 }
 
+impl fmt::Display for FatVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Fat3 => write!(f, "FAT3"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EntryVersion {
     V8,
@@ -94,6 +102,14 @@ impl TryFrom<u32> for EntryVersion {
         match version {
             8 => Ok(Self::V8),
             _ => Err(Self::Error::UnknownEntryVersion(version)),
+        }
+    }
+}
+
+impl fmt::Display for EntryVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::V8 => write!(f, "V8"),
         }
     }
 }
@@ -124,6 +140,19 @@ impl TryFrom<u8> for Platform {
     }
 }
 
+impl fmt::Display for Platform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Any => write!(f, "Any"),
+            Self::Win32 => write!(f, "Win32"),
+            Self::Xenon => write!(f, "Xenon"),
+            Self::Ps3 => write!(f, "PS3"),
+            Self::Win64 => write!(f, "Win64"),
+            Self::WiiU => write!(f, "WiiU"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NameHashVersion {
     V50,
@@ -136,6 +165,14 @@ impl TryFrom<u8> for NameHashVersion {
         match version {
             50 => Ok(Self::V50),
             _ => Err(Self::Error::UnknownNameHashVersion(version)),
+        }
+    }
+}
+
+impl fmt::Display for NameHashVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::V50 => write!(f, "V50"),
         }
     }
 }
@@ -276,11 +313,11 @@ impl Fat {
 
         Ok(Self {
             metadata: FatMetadata {
-            fat_version,
-            entry_version,
-            platform,
-            compression_version,
-            name_hash_version,
+                fat_version,
+                entry_version,
+                platform,
+                compression_version,
+                name_hash_version,
             },
             entries,
         })

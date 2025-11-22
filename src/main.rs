@@ -21,6 +21,12 @@ fn existing_file(source: &str) -> Result<PathBuf, String> {
 
 #[derive(Debug, Subcommand)]
 enum Action {
+    /// Display info about a FAT
+    Info {
+        /// Path to a FAT file
+        #[arg(value_parser = existing_file)]
+        fat: PathBuf,
+    },
     /// List files in a FAT without unpacking anything
     List {
         /// Path to a FAT file
@@ -52,6 +58,28 @@ enum Action {
 struct Args {
     #[command(subcommand)]
     action: Action,
+}
+
+fn info(fat_path: PathBuf) -> Result<(), Box<dyn Error>> {
+    let fat = Fat::open(&fat_path)?;
+    let metadata = fat.metadata;
+
+    println!(
+        "{}\n",
+        fat_path
+            .file_name()
+            .expect("existing_file() should guarantee that fat_path has a filename")
+            .display()
+    );
+
+    println!("FAT version:         {}", metadata.fat_version);
+    println!("Entry version:       {}", metadata.entry_version);
+    println!("Platform:            {}", metadata.platform);
+    println!("Compression version: {}", metadata.compression_version);
+    println!("Name hash version:   {}", metadata.name_hash_version);
+    println!("Entry count:         {}", fat.entries.len());
+
+    Ok(())
 }
 
 fn list(fat_path: PathBuf, verbose: bool) -> Result<(), Box<dyn Error>> {
@@ -100,6 +128,7 @@ fn main() -> ExitCode {
     let args = Args::parse();
 
     let action_result: Result<(), Box<dyn Error>> = match args.action {
+        Action::Info { fat } => info(fat),
         Action::List { fat, verbose } => list(fat, verbose),
         Action::Unpack { fat, dat, out } => unpack(fat, dat, out),
     };
