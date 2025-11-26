@@ -330,7 +330,7 @@ impl Fat {
         }
     }
 
-    pub fn open(path: impl AsRef<Path>) -> Result<Fat, FatDeserializationError> {
+    pub fn open(path: &impl AsRef<Path>) -> Result<Fat, FatDeserializationError> {
         let file = BufReader::new(File::open(path)?);
         Self::deserialize(file)
     }
@@ -419,7 +419,7 @@ impl<R: Read + Seek> Dat<R> {
     pub fn unpack_to_file(
         &mut self,
         entry: Entry,
-        dest: impl AsRef<Path>,
+        dest: &impl AsRef<Path>,
     ) -> Result<(), UnpackError> {
         // BufWriter will not help here because decompression functions write in big chunks
         let outfile = File::create(dest)?;
@@ -429,19 +429,19 @@ impl<R: Read + Seek> Dat<R> {
     pub fn unpack_to_dir(
         &mut self,
         entry: Entry,
-        archive_root_dir: impl AsRef<Path>,
+        archive_root_dir: &impl AsRef<Path>,
     ) -> Result<(), UnpackError> {
         let dest: PathBuf = [archive_root_dir.as_ref(), &entry.path()].iter().collect();
 
         let dest_dir = dest.parent().expect("dest should always have a parent");
         fs::create_dir_all(dest_dir)?;
 
-        self.unpack_to_file(entry, dest)
+        self.unpack_to_file(entry, &dest)
     }
 }
 
 impl Dat<BufReader<File>> {
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+    pub fn open(path: &impl AsRef<Path>) -> Result<Self, io::Error> {
         let file = BufReader::new(File::open(path)?);
         Ok(Self { inner: file })
     }

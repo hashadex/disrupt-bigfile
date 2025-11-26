@@ -83,7 +83,7 @@ fn info(fat_path: PathBuf) -> Result<(), Box<dyn Error>> {
 }
 
 fn list(fat_path: PathBuf, verbose: bool) -> Result<(), Box<dyn Error>> {
-    let fat = Fat::open(fat_path)?;
+    let fat = Fat::open(&fat_path)?;
 
     let mut lock = io::stdout().lock();
     for entry in fat.entries {
@@ -113,8 +113,8 @@ fn unpack(
         dat_path_guess
     });
 
-    let fat = Fat::open(fat_path)?;
-    let mut dat = Dat::open(dat_path)?;
+    let fat = Fat::open(&fat_path)?;
+    let mut dat = Dat::open(&dat_path)?;
 
     for entry in fat.entries.iter().progress() {
         dat.unpack_to_dir(*entry, &out_dir)
