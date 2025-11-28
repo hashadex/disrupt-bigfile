@@ -90,7 +90,10 @@ pub enum XMemCompressError {
     UnknownFlags(u32),
     UnsupportedWindowSize(u32),
     UnexpectedCompressionPartitionSize(u32),
-    LzxdError(u64, lzxd::DecompressError),
+    LzxdError {
+        chunk_num: u64,
+        err: lzxd::DecompressError,
+    },
 }
 
 impl From<io::Error> for XMemCompressError {
@@ -130,8 +133,8 @@ impl fmt::Display for XMemCompressError {
                 f,
                 "unexpected compression partition size {part_size}, expected {XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE}"
             ),
-            Self::LzxdError(chunk_num, error) => {
-                write!(f, "lzxd error on chunk #{chunk_num}: {error}")
+            Self::LzxdError { chunk_num, err } => {
+                write!(f, "lzxd error on chunk #{chunk_num}: {err}")
             }
         }
     }
@@ -246,7 +249,7 @@ pub fn decompress_xmemcompress(
         let mut lzxd_context = Lzxd::new(window_size);
         let decompressed_chunk_buf = lzxd_context
             .decompress_next(&compressed_chunk_buf, uncompressed_chunk_size.into())
-            .map_err(|err| XMemCompressError::LzxdError(chunk_num, err))?;
+            .map_err(|err| XMemCompressError::LzxdError { chunk_num, err })?;
 
         out_buf.write_all(decompressed_chunk_buf)?;
     }
