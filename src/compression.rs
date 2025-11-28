@@ -56,19 +56,13 @@ impl fmt::Display for CompressionScheme {
 }
 
 impl CompressionScheme {
-    pub fn from_scheme_id(
-        scheme_id: u8,
-        compression_version: CompressionVersion,
-    ) -> Result<Self, FatDeserializationError> {
+    pub fn from_scheme_id(scheme_id: u8, compression_version: CompressionVersion) -> Option<Self> {
         match (compression_version, scheme_id) {
-            (_, 0) => Ok(Self::None),
-            (CompressionVersion::V4 | CompressionVersion::V5, 1) => Ok(Self::LZO1x),
-            (CompressionVersion::V4 | CompressionVersion::V5, 2) => Ok(Self::Zlib),
-            (CompressionVersion::V5, 3) => Ok(Self::XMemCompress),
-            _ => Err(FatDeserializationError::UnknownCompressionScheme {
-                scheme_id,
-                compression_version,
-            }),
+            (_, 0) => Some(Self::None),
+            (CompressionVersion::V4 | CompressionVersion::V5, 1) => Some(Self::LZO1x),
+            (CompressionVersion::V4 | CompressionVersion::V5, 2) => Some(Self::Zlib),
+            (CompressionVersion::V5, 3) => Some(Self::XMemCompress),
+            _ => None,
         }
     }
 }

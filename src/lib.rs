@@ -232,7 +232,12 @@ impl Entry {
         let compressed_size = c & 0x1FFFFFFF;
 
         let compression_scheme =
-            CompressionScheme::from_scheme_id(compression_scheme_id, compression_version)?;
+            CompressionScheme::from_scheme_id(compression_scheme_id, compression_version).ok_or(
+                FatDeserializationError::UnknownCompressionScheme {
+                    scheme_id: compression_scheme_id,
+                    compression_version,
+                },
+            )?;
 
         // For some reason, if the entry's compression scheme is None, uncompressed size is set to
         // 0 and compressed size is set to the size of the entry. Let's set both to the same value
