@@ -3,7 +3,7 @@ mod filelists;
 
 use std::fmt;
 use std::fs::{self, File};
-use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom, Take, Write};
+use std::io::{self, BufReader, BufWriter, ErrorKind, Read, Seek, SeekFrom, Take, Write};
 use std::path::{Path, PathBuf};
 
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
@@ -282,6 +282,8 @@ pub const WD1_WIN64_METADATA: FatMetadata = FatMetadata {
     name_hash_version: NameHashVersion::V50,
 };
 
+// const ENTRY_V8_MAX_NAME_HASH: u64 = u32::MAX.into();
+// https://github.com/rust-lang/rust/issues/143874
 const ENTRY_V8_MAX_NAME_HASH: u64 = 2u64.pow(32);
 const ENTRY_V8_MAX_OFFSET: u64 = 2u64.pow(35);
 const ENTRY_V8_MAX_SIZE: u32 = 2u32.pow(29);
@@ -657,5 +659,120 @@ impl Dat<BufReader<File>> {
     pub fn open(path: &impl AsRef<Path>) -> Result<Self, io::Error> {
         let file = BufReader::new(File::open(path)?);
         Ok(Self { inner: file })
+    }
+}
+
+pub struct ArchiveBuilder<W: Write + Seek> {
+    fat: Fat,
+    dat: W,
+    dat_position: u64,
+    last_add_failed: bool,
+}
+
+impl<W: Write + Seek> ArchiveBuilder<W> {
+    pub fn new(fat_metadata: FatMetadata, mut dat: W) -> Result<Self, io::Error> {
+        let dat_position = dat.stream_position()?;
+
+        let fat = Fat::new(fat_metadata);
+
+        Ok(ArchiveBuilder {
+            fat,
+            dat,
+            dat_position,
+            last_add_failed: false,
+        })
+    }
+
+    pub fn into_inner(self) -> (Fat, W) {
+        (self.fat, self.dat)
+    }
+
+    fn compute_name_hash(&self, relative_entry_path: &impl AsRef<Path>) -> u64 {
+        let mut hash: u64 = 0xCBF29CE484222325; // Set hash to default seed
+
+        for byte in relative_entry_path.as_ref().to_string_lossy().replace('/', "\\").bytes() {
+            hash = hash.wrapping_mul(0x100000001B3);
+            hash ^= u64::from(byte);
+        }
+
+        if self.fat.metadata.fat_version == FatVersion::Fat3 {
+            hash &= 0xFFFFFFFF;
+        }
+
+        hash
+    }
+
+    pub fn add(
+        &mut self,
+        mut data: impl Read,
+        relative_entry_path: &impl AsRef<Path>
+    ) -> Result<(), io::Error> {
+        // If the last add failed, dat_position might not accurately reflect dat's actual position.
+        // Let's fix this by rewinding dat to the position after the last successful add() call.
+        if self.last_add_failed {
+            self.dat.seek(SeekFrom::Start(self.dat_position))?;
+            self.last_add_failed = false;
+        }
+
+        let copied = io::copy(&mut data, &mut self.dat)
+            .and_then(|copied| {
+                u32::try_from(copied).map_err(|_| {
+                    io::Error::new(
+                        ErrorKind::FileTooLarge,
+                        "can't add entry because its size is too large to fit into an Entry struct",
+                    )
+                })
+            })
+            .inspect_err(|_| self.last_add_failed = true)?;
+
+        let name_hash = self.compute_name_hash(relative_entry_path);
+
+        let entry = Entry {
+            name_hash,
+            offset: self.dat_position,
+            compression_scheme: CompressionScheme::None,
+            uncompressed_size: copied,
+            compressed_size: copied,
+        };
+        self.fat.entries.push(entry);
+
+        self.dat_position += u64::from(copied);
+
+        Ok(())
+    }
+
+    pub fn add_file(
+        &mut self,
+        archive_root: &impl AsRef<Path>,
+        relative_entry_path: &impl AsRef<Path>,
+    ) -> Result<(), io::Error> {
+        let archive_root = archive_root.as_ref();
+        let relative_entry_path = relative_entry_path.as_ref();
+
+        let file_path: PathBuf = [archive_root, relative_entry_path].iter().collect();
+        let file = File::open(file_path)?;
+
+        self.add(file, &relative_entry_path)
+    }
+
+    pub fn write_fat(&self, out: impl Write) -> Result<(), FatSerializationError> {
+        self.fat.serialize(out)
+    }
+
+    pub fn create_fat(&self, fat_path: &impl AsRef<Path>) -> Result<(), FatSerializationError> {
+        let fat_file = BufWriter::new(File::create(fat_path)?);
+
+        self.write_fat(fat_file)
+    }
+}
+
+impl ArchiveBuilder<File> {
+    pub fn create(
+        fat_metadata: FatMetadata,
+        dat_path: impl AsRef<Path>,
+    ) -> Result<Self, io::Error> {
+        let dat = File::create(dat_path)?;
+
+        Self::new(fat_metadata, dat)
     }
 }
