@@ -26,6 +26,16 @@ impl TryFrom<u8> for CompressionVersion {
     }
 }
 
+impl From<CompressionVersion> for u8 {
+    fn from(version: CompressionVersion) -> Self {
+        match version {
+            CompressionVersion::V0 => 0,
+            CompressionVersion::V4 => 4,
+            CompressionVersion::V5 => 5,
+        }
+    }
+}
+
 impl fmt::Display for CompressionVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -57,11 +67,21 @@ impl fmt::Display for CompressionScheme {
 
 impl CompressionScheme {
     pub fn from_scheme_id(scheme_id: u8, compression_version: CompressionVersion) -> Option<Self> {
-        match (compression_version, scheme_id) {
-            (_, 0) => Some(Self::None),
-            (CompressionVersion::V4 | CompressionVersion::V5, 1) => Some(Self::LZO1x),
-            (CompressionVersion::V4 | CompressionVersion::V5, 2) => Some(Self::Zlib),
-            (CompressionVersion::V5, 3) => Some(Self::XMemCompress),
+        match (scheme_id, compression_version) {
+            (0, _) => Some(Self::None),
+            (1, CompressionVersion::V4 | CompressionVersion::V5) => Some(Self::LZO1x),
+            (2, CompressionVersion::V4 | CompressionVersion::V5) => Some(Self::Zlib),
+            (3, CompressionVersion::V5) => Some(Self::XMemCompress),
+            _ => None,
+        }
+    }
+
+    pub fn to_scheme_id(&self, compression_version: CompressionVersion) -> Option<u8> {
+        match (self, compression_version) {
+            (Self::None, _) => Some(0),
+            (Self::LZO1x, CompressionVersion::V4 | CompressionVersion::V5) => Some(1),
+            (Self::Zlib, CompressionVersion::V4 | CompressionVersion::V5) => Some(2),
+            (Self::XMemCompress, CompressionVersion::V5) => Some(3),
             _ => None,
         }
     }

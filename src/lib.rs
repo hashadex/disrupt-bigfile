@@ -6,7 +6,7 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom, Take, Write};
 use std::path::{Path, PathBuf};
 
-use byteorder::{LE, ReadBytesExt};
+use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 
 pub use compression::{CompressionScheme, CompressionVersion, XMemCompressError};
 
@@ -36,24 +36,24 @@ impl From<io::Error> for FatDeserializationError {
 impl fmt::Display for FatDeserializationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FatDeserializationError::Io(err) => write!(f, "io error: {err}"),
-            FatDeserializationError::BadMagic(magic) => {
+            Self::Io(err) => write!(f, "io error: {err}"),
+            Self::BadMagic(magic) => {
                 write!(f, "bad magic 0x{magic:X}, expected 0x{FAT3_MAGIC:X}")
             }
-            FatDeserializationError::UnknownEntryVersion(version) => {
+            Self::UnknownEntryVersion(version) => {
                 write!(f, "unknown entry version {version}")
             }
-            FatDeserializationError::UnknownPlatformId(id) => write!(f, "unknown platform id {id}"),
-            FatDeserializationError::UnknownCompressionVersion(version) => {
+            Self::UnknownPlatformId(id) => write!(f, "unknown platform id {id}"),
+            Self::UnknownCompressionVersion(version) => {
                 write!(f, "unknown compression version {version}")
             }
-            FatDeserializationError::UnknownNameHashVersion(version) => {
+            Self::UnknownNameHashVersion(version) => {
                 write!(f, "unknown name hash version {version}")
             }
-            FatDeserializationError::UnexpectedPaddingByte(byte) => {
+            Self::UnexpectedPaddingByte(byte) => {
                 write!(f, "unexpected padding byte 0x{byte:X}, expected 0x00")
             }
-            FatDeserializationError::UnknownCompressionScheme {
+            Self::UnknownCompressionScheme {
                 scheme_id,
                 compression_version,
             } => write!(
@@ -65,6 +65,65 @@ impl fmt::Display for FatDeserializationError {
 }
 
 impl std::error::Error for FatDeserializationError {}
+
+#[derive(Debug)]
+pub enum FatSerializationError {
+    Io(io::Error),
+    UnsupportedCompressionScheme {
+        scheme: CompressionScheme,
+        version: CompressionVersion,
+    },
+    EntryCountWontFit(usize),
+    NameHashWontFit {
+        name_hash: u64,
+        max: u64,
+    },
+    OffsetWontFit {
+        offset: u64,
+        max: u64,
+    },
+    SizeWontFit {
+        size: u32,
+        max: u32,
+    },
+}
+
+impl From<io::Error> for FatSerializationError {
+    fn from(err: io::Error) -> Self {
+        FatSerializationError::Io(err)
+    }
+}
+
+impl fmt::Display for FatSerializationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "io error: {err}"),
+            Self::UnsupportedCompressionScheme { scheme, version } => write!(
+                f,
+                "compression scheme {scheme} is not supported by compression version {version}"
+            ),
+            Self::EntryCountWontFit(count) => write!(
+                f,
+                "entry count is too large to fit into header, expected {} entries max, got {count}",
+                u32::MAX
+            ),
+            Self::NameHashWontFit { name_hash, max } => write!(
+                f,
+                "name hash 0x{name_hash:X} is too large to fit into entry, expected 0x{max:X} max"
+            ),
+            Self::OffsetWontFit { offset, max } => write!(
+                f,
+                "offset 0x{offset:X} is too large to fit into entry, expected 0x{max:X} max"
+            ),
+            Self::SizeWontFit { size, max } => write!(
+                f,
+                "compressed/uncompressed size {size} is too large to fit into entry, expected {max} max"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for FatSerializationError {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FatVersion {
@@ -106,6 +165,14 @@ impl TryFrom<u32> for EntryVersion {
     }
 }
 
+impl From<EntryVersion> for u32 {
+    fn from(version: EntryVersion) -> Self {
+        match version {
+            EntryVersion::V8 => 8,
+        }
+    }
+}
+
 impl fmt::Display for EntryVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -140,6 +207,19 @@ impl TryFrom<u8> for Platform {
     }
 }
 
+impl From<Platform> for u8 {
+    fn from(platform: Platform) -> Self {
+        match platform {
+            Platform::Any => 0,
+            Platform::Win32 => 1,
+            Platform::Xenon => 2,
+            Platform::Ps3 => 3,
+            Platform::Win64 => 4,
+            Platform::WiiU => 8,
+        }
+    }
+}
+
 impl fmt::Display for Platform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -169,6 +249,14 @@ impl TryFrom<u8> for NameHashVersion {
     }
 }
 
+impl From<NameHashVersion> for u8 {
+    fn from(version: NameHashVersion) -> Self {
+        match version {
+            NameHashVersion::V50 => 50,
+        }
+    }
+}
+
 impl fmt::Display for NameHashVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -194,6 +282,10 @@ pub const WD1_WIN64_METADATA: FatMetadata = FatMetadata {
     name_hash_version: NameHashVersion::V50,
 };
 
+const ENTRY_V8_MAX_NAME_HASH: u64 = 2u64.pow(32);
+const ENTRY_V8_MAX_OFFSET: u64 = 2u64.pow(35);
+const ENTRY_V8_MAX_SIZE: u32 = 2u32.pow(29);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Entry {
     pub name_hash: u64,
@@ -204,21 +296,23 @@ pub struct Entry {
 }
 
 impl Entry {
+    // Entry V8 layout
+
+    // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
+    // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
+    // oooccccc cccccccc cccccccc cccccccc
+    // oooooooo oooooooo oooooooo oooooooo
+
+    // [h] hash = 32 bits
+    // [u] uncompressed size = 29 bits
+    // [s] compression scheme = 3 bits
+    // [o] offset = 35 bits
+    // [c] compressed size = 29 bits
+
     fn deserialize_v8(
         mut data: impl Read,
         compression_version: CompressionVersion,
     ) -> Result<Self, FatDeserializationError> {
-        // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
-        // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
-        // oooccccc cccccccc cccccccc cccccccc
-        // oooooooo oooooooo oooooooo oooooooo
-
-        // [h] hash = 32 bits
-        // [u] uncompressed size = 29 bits
-        // [s] compression scheme = 3 bits
-        // [o] offset = 35 bits
-        // [c] compressed size = 29 bits
-
         let a = data.read_u32::<LE>()?;
         let b = data.read_u32::<LE>()?;
         let c = data.read_u32::<LE>()?;
@@ -227,7 +321,7 @@ impl Entry {
         let name_hash = u64::from(a);
         let mut uncompressed_size = b >> 3;
         let compression_scheme_id =
-            u8::try_from(b & 0b111).expect("b & 0b111 should always fit into u8");
+            u8::try_from(b & 0b111).expect("u32 & 0b111 should always fit into u8");
         let offset = (u64::from(d) << 3) | u64::from(c >> 29);
         let compressed_size = c & 0x1FFFFFFF;
 
@@ -255,6 +349,70 @@ impl Entry {
         })
     }
 
+    fn serialize_v8(
+        &self,
+        mut out: impl Write,
+        compression_version: CompressionVersion,
+    ) -> Result<(), FatSerializationError> {
+        if self.name_hash > ENTRY_V8_MAX_NAME_HASH {
+            return Err(FatSerializationError::NameHashWontFit {
+                name_hash: self.name_hash,
+                max: ENTRY_V8_MAX_NAME_HASH,
+            });
+        }
+
+        if self.offset > ENTRY_V8_MAX_OFFSET {
+            return Err(FatSerializationError::OffsetWontFit {
+                offset: self.offset,
+                max: ENTRY_V8_MAX_OFFSET,
+            });
+        }
+
+        if self.compressed_size > ENTRY_V8_MAX_SIZE {
+            return Err(FatSerializationError::SizeWontFit {
+                size: self.compressed_size,
+                max: ENTRY_V8_MAX_SIZE,
+            });
+        }
+        if self.uncompressed_size > ENTRY_V8_MAX_SIZE {
+            return Err(FatSerializationError::SizeWontFit {
+                size: self.uncompressed_size,
+                max: ENTRY_V8_MAX_SIZE,
+            });
+        }
+
+        let name_hash: u32 = self
+            .name_hash
+            .try_into()
+            .expect("name_hash <= ENTRY_V8_MAX_NAME_HASH, so it should fit into u32");
+        let compression_scheme_id: u32 = self
+            .compression_scheme
+            .to_scheme_id(compression_version)
+            .ok_or(FatSerializationError::UnsupportedCompressionScheme {
+                scheme: self.compression_scheme,
+                version: compression_version,
+            })?
+            .into();
+        let offset_lsb: u32 = (self.offset & 0b111)
+            .try_into()
+            .expect("u64 & 0b111 should always fit into u32");
+        let offset_msb: u32 = (self.offset >> 3)
+            .try_into()
+            .expect("35 bit int >> 3 should always fit into u32");
+
+        let a = name_hash;
+        let b = (self.uncompressed_size << 3) | compression_scheme_id;
+        let c = (offset_lsb << 29) | self.compressed_size;
+        let d = offset_msb;
+
+        out.write_u32::<LE>(a)?;
+        out.write_u32::<LE>(b)?;
+        out.write_u32::<LE>(c)?;
+        out.write_u32::<LE>(d)?;
+
+        Ok(())
+    }
+
     pub fn deserialize(
         data: impl Read,
         entry_version: EntryVersion,
@@ -262,6 +420,17 @@ impl Entry {
     ) -> Result<Self, FatDeserializationError> {
         match entry_version {
             EntryVersion::V8 => Self::deserialize_v8(data, compression_version),
+        }
+    }
+
+    pub fn serialize(
+        &self,
+        out: impl Write,
+        entry_version: EntryVersion,
+        compression_version: CompressionVersion,
+    ) -> Result<(), FatSerializationError> {
+        match entry_version {
+            EntryVersion::V8 => self.serialize_v8(out, compression_version),
         }
     }
 
@@ -293,7 +462,7 @@ pub struct Fat {
 }
 
 impl Fat {
-    pub fn deserialize(mut data: impl Read) -> Result<Fat, FatDeserializationError> {
+    pub fn deserialize(mut data: impl Read) -> Result<Self, FatDeserializationError> {
         let fat_version = FatVersion::try_from(data.read_u32::<LE>()?)?;
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
 
@@ -335,9 +504,46 @@ impl Fat {
         }
     }
 
-    pub fn open(path: &impl AsRef<Path>) -> Result<Fat, FatDeserializationError> {
+    pub fn open(path: &impl AsRef<Path>) -> Result<Self, FatDeserializationError> {
         let file = BufReader::new(File::open(path)?);
         Self::deserialize(file)
+    }
+
+    pub fn serialize(&self, mut out: impl Write) -> Result<(), FatSerializationError> {
+        let metadata = self.metadata;
+        let entries = &self.entries;
+
+        let magic = match metadata.fat_version {
+            FatVersion::Fat3 => FAT3_MAGIC,
+        };
+        out.write_u32::<LE>(magic)?;
+
+        out.write_u32::<LE>(metadata.entry_version.into())?;
+
+        // Flags
+        out.write_u8(metadata.platform.into())?;
+        out.write_u8(metadata.compression_version.into())?;
+        out.write_u8(metadata.name_hash_version.into())?;
+        out.write_u8(0x00)?;
+
+        let entry_count = entries.len();
+        let entry_count: u32 = entry_count
+            .try_into()
+            .map_err(|_| FatSerializationError::EntryCountWontFit(entry_count))?;
+        out.write_u32::<LE>(entry_count)?;
+
+        for entry in entries {
+            entry.serialize(
+                &mut out,
+                metadata.entry_version,
+                metadata.compression_version,
+            )?;
+        }
+
+        // Localization count
+        out.write_u32::<LE>(0)?;
+
+        Ok(())
     }
 }
 
