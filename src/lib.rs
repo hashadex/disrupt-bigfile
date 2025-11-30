@@ -274,19 +274,15 @@ pub struct FatMetadata {
     pub name_hash_version: NameHashVersion,
 }
 
-pub const WD1_WIN64_METADATA: FatMetadata = FatMetadata {
-    fat_version: FatVersion::Fat3,
-    entry_version: EntryVersion::V8,
-    platform: Platform::Win64,
-    compression_version: CompressionVersion::V5,
-    name_hash_version: NameHashVersion::V50,
-};
-
-// const ENTRY_V8_MAX_NAME_HASH: u64 = u32::MAX.into();
-// https://github.com/rust-lang/rust/issues/143874
-const ENTRY_V8_MAX_NAME_HASH: u64 = 2u64.pow(32);
-const ENTRY_V8_MAX_OFFSET: u64 = 2u64.pow(35);
-const ENTRY_V8_MAX_SIZE: u32 = 2u32.pow(29);
+impl FatMetadata {
+    pub const WD1_WIN64: FatMetadata = FatMetadata {
+        fat_version: FatVersion::Fat3,
+        entry_version: EntryVersion::V8,
+        platform: Platform::Win64,
+        compression_version: CompressionVersion::V5,
+        name_hash_version: NameHashVersion::V50,
+    };
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Entry {
@@ -351,42 +347,48 @@ impl Entry {
         })
     }
 
+    // const V8_MAX_NAME_HASH: u64 = u32::MAX.into();
+    // https://github.com/rust-lang/rust/issues/143874
+    const V8_MAX_NAME_HASH: u64 = 2u64.pow(32);
+    const V8_MAX_OFFSET: u64 = 2u64.pow(35);
+    const V8_MAX_SIZE: u32 = 2u32.pow(29);
+
     fn serialize_v8(
         &self,
         mut out: impl Write,
         compression_version: CompressionVersion,
     ) -> Result<(), FatSerializationError> {
-        if self.name_hash > ENTRY_V8_MAX_NAME_HASH {
+        if self.name_hash > Entry::V8_MAX_NAME_HASH {
             return Err(FatSerializationError::NameHashWontFit {
                 name_hash: self.name_hash,
-                max: ENTRY_V8_MAX_NAME_HASH,
+                max: Entry::V8_MAX_NAME_HASH,
             });
         }
 
-        if self.offset > ENTRY_V8_MAX_OFFSET {
+        if self.offset > Entry::V8_MAX_OFFSET {
             return Err(FatSerializationError::OffsetWontFit {
                 offset: self.offset,
-                max: ENTRY_V8_MAX_OFFSET,
+                max: Entry::V8_MAX_OFFSET,
             });
         }
 
-        if self.compressed_size > ENTRY_V8_MAX_SIZE {
+        if self.compressed_size > Entry::V8_MAX_SIZE {
             return Err(FatSerializationError::SizeWontFit {
                 size: self.compressed_size,
-                max: ENTRY_V8_MAX_SIZE,
+                max: Entry::V8_MAX_SIZE,
             });
         }
-        if self.uncompressed_size > ENTRY_V8_MAX_SIZE {
+        if self.uncompressed_size > Entry::V8_MAX_SIZE {
             return Err(FatSerializationError::SizeWontFit {
                 size: self.uncompressed_size,
-                max: ENTRY_V8_MAX_SIZE,
+                max: Entry::V8_MAX_SIZE,
             });
         }
 
         let name_hash: u32 = self
             .name_hash
             .try_into()
-            .expect("name_hash <= ENTRY_V8_MAX_NAME_HASH, so it should fit into u32");
+            .expect("name_hash <= Entry::V8_MAX_NAME_HASH, so it should fit into u32");
         let compression_scheme_id: u32 = self
             .compression_scheme
             .to_scheme_id(compression_version)
