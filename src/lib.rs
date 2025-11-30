@@ -543,6 +543,8 @@ impl Fat {
         // Localization count
         out.write_u32::<LE>(0)?;
 
+        out.flush()?;
+
         Ok(())
     }
 }
