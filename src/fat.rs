@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
-use byteorder::{ReadBytesExt, LE, WriteBytesExt};
+use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 
 use crate::compression::{CompressionScheme, CompressionVersion};
 use crate::filelists;
