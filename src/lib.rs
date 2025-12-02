@@ -1,6 +1,7 @@
 mod compression;
 mod filelists;
 
+use std::error;
 use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter, ErrorKind, Read, Seek, SeekFrom, Take, Write};
@@ -64,7 +65,7 @@ impl fmt::Display for FatDeserializationError {
     }
 }
 
-impl std::error::Error for FatDeserializationError {}
+impl error::Error for FatDeserializationError {}
 
 #[derive(Debug)]
 pub enum FatSerializationError {
@@ -123,7 +124,7 @@ impl fmt::Display for FatSerializationError {
     }
 }
 
-impl std::error::Error for FatSerializationError {}
+impl error::Error for FatSerializationError {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FatVersion {
@@ -580,7 +581,7 @@ impl fmt::Display for UnpackError {
     }
 }
 
-impl std::error::Error for UnpackError {}
+impl error::Error for UnpackError {}
 
 pub struct Dat<R: Read + Seek> {
     inner: R,
