@@ -665,6 +665,39 @@ impl Dat<BufReader<File>> {
     }
 }
 
+#[derive(Debug)]
+pub enum PackError {
+    Io(io::Error),
+    FileTooLarge(u64),
+    CantParseUnknownFileHash(PathBuf),
+}
+
+impl From<io::Error> for PackError {
+    fn from(err: io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+impl fmt::Display for PackError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "io error: {err}"),
+            Self::FileTooLarge(size) => write!(
+                f,
+                "can't add file because its size is too large to fit into an Entry struct (expected {} max, got {size})",
+                u32::MAX
+            ),
+            Self::CantParseUnknownFileHash(path) => write!(
+                f,
+                "can't parse name hash from unknown file path {}",
+                path.display()
+            ),
+        }
+    }
+}
+
+impl error::Error for PackError {}
+
 pub struct ArchiveBuilder<W: Write + Seek> {
     fat: Fat,
     dat: W,
@@ -690,26 +723,43 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         (self.fat, self.dat)
     }
 
-    fn compute_name_hash(&self, relative_entry_path: &impl AsRef<Path>) -> u64 {
-        let mut hash: u64 = 0xCBF29CE484222325; // Set hash to default seed
+    const FNV1_SEED: u64 = 0xCBF29CE484222325;
 
-        for byte in relative_entry_path.as_ref().to_string_lossy().replace('/', "\\").bytes() {
-            hash = hash.wrapping_mul(0x100000001B3);
-            hash ^= u64::from(byte);
+    fn compute_name_hash(&self, relative_entry_path: &impl AsRef<Path>) -> Result<u64, PackError> {
+        let path = relative_entry_path.as_ref();
+
+        let mut hash;
+
+        if path.starts_with("__UNKNOWN") {
+            hash = path
+                .file_stem()
+                .and_then(|stem| u64::from_str_radix(&stem.to_string_lossy(), 16).ok())
+                .ok_or_else(|| PackError::CantParseUnknownFileHash(path.to_path_buf()))?
+        } else if path.starts_with("__DUPLICATE") {
+            todo!();
+        } else {
+            let windows_path = path.to_string_lossy().replace('/', "\\");
+
+            hash = Self::FNV1_SEED;
+
+            for byte in windows_path.bytes() {
+                hash = hash.wrapping_mul(0x100000001B3);
+                hash ^= u64::from(byte);
+            }
         }
 
         if self.fat.metadata.fat_version == FatVersion::Fat3 {
             hash &= 0xFFFFFFFF;
         }
 
-        hash
+        Ok(hash)
     }
 
     pub fn add(
         &mut self,
         mut data: impl Read,
-        relative_entry_path: &impl AsRef<Path>
-    ) -> Result<(), io::Error> {
+        relative_entry_path: &impl AsRef<Path>,
+    ) -> Result<(), PackError> {
         // If the last add failed, dat_position might not accurately reflect dat's actual position.
         // Let's fix this by rewinding dat to the position after the last successful add() call.
         if self.last_add_failed {
@@ -718,17 +768,11 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         }
 
         let copied = io::copy(&mut data, &mut self.dat)
-            .and_then(|copied| {
-                u32::try_from(copied).map_err(|_| {
-                    io::Error::new(
-                        ErrorKind::FileTooLarge,
-                        "can't add entry because its size is too large to fit into an Entry struct",
-                    )
-                })
-            })
+            .map_err(PackError::Io)
+            .and_then(|copied| u32::try_from(copied).map_err(|_| PackError::FileTooLarge(copied)))
             .inspect_err(|_| self.last_add_failed = true)?;
 
-        let name_hash = self.compute_name_hash(relative_entry_path);
+        let name_hash = self.compute_name_hash(relative_entry_path)?;
 
         let entry = Entry {
             name_hash,
@@ -748,7 +792,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         &mut self,
         archive_root: &impl AsRef<Path>,
         relative_entry_path: &impl AsRef<Path>,
-    ) -> Result<(), io::Error> {
+    ) -> Result<(), PackError> {
         let archive_root = archive_root.as_ref();
         let relative_entry_path = relative_entry_path.as_ref();
 
