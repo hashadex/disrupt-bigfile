@@ -65,7 +65,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         (self.fat, self.dat)
     }
 
-    const FNV1_SEED: u64 = 0xCBF29CE484222325;
+    const FNV1_SEED: u64 = 0xCBF2_9CE4_8422_2325;
 
     fn compute_name_hash(&self, relative_entry_path: &impl AsRef<Path>) -> Result<u64, PackError> {
         let path = relative_entry_path.as_ref();
@@ -76,7 +76,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
             hash = path
                 .file_stem()
                 .and_then(|stem| u64::from_str_radix(&stem.to_string_lossy(), 16).ok())
-                .ok_or_else(|| PackError::CantParseUnknownFileHash(path.to_path_buf()))?
+                .ok_or_else(|| PackError::CantParseUnknownFileHash(path.to_path_buf()))?;
         } else if path.starts_with("__DUPLICATE") {
             todo!();
         } else {
@@ -85,13 +85,13 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
             hash = Self::FNV1_SEED;
 
             for byte in windows_path.bytes() {
-                hash = hash.wrapping_mul(0x100000001B3);
+                hash = hash.wrapping_mul(0x0100_0000_01B3);
                 hash ^= u64::from(byte);
             }
         }
 
         if self.fat.metadata.fat_version == FatVersion::Fat3 {
-            hash &= 0xFFFFFFFF;
+            hash &= 0xFFFF_FFFF;
         }
 
         Ok(hash)

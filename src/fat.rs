@@ -9,7 +9,7 @@ use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 use crate::compression::{CompressionScheme, CompressionVersion};
 use crate::filelists;
 
-const FAT3_MAGIC: u32 = 0x46415433;
+const FAT3_MAGIC: u32 = 0x4641_5433;
 
 #[derive(Debug)]
 pub enum FatDeserializationError {
@@ -320,7 +320,7 @@ impl Entry {
         let compression_scheme_id =
             u8::try_from(b & 0b111).expect("u32 & 0b111 should always fit into u8");
         let offset = (u64::from(d) << 3) | u64::from(c >> 29);
-        let compressed_size = c & 0x1FFFFFFF;
+        let compressed_size = c & 0x1FFF_FFFF;
 
         let compression_scheme =
             CompressionScheme::from_scheme_id(compression_scheme_id, compression_version).ok_or(
@@ -396,17 +396,17 @@ impl Entry {
                 version: compression_version,
             })?
             .into();
-        let offset_lsb: u32 = (self.offset & 0b111)
+        let offset_last_3_bits: u32 = (self.offset & 0b111)
             .try_into()
             .expect("u64 & 0b111 should always fit into u32");
-        let offset_msb: u32 = (self.offset >> 3)
+        let offset_first_32_bits: u32 = (self.offset >> 3)
             .try_into()
             .expect("35 bit int >> 3 should always fit into u32");
 
         let a = name_hash;
         let b = (self.uncompressed_size << 3) | compression_scheme_id;
-        let c = (offset_lsb << 29) | self.compressed_size;
-        let d = offset_msb;
+        let c = (offset_last_3_bits << 29) | self.compressed_size;
+        let d = offset_first_32_bits;
 
         out.write_u32::<LE>(a)?;
         out.write_u32::<LE>(b)?;

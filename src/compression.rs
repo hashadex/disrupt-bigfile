@@ -76,7 +76,7 @@ impl CompressionScheme {
         }
     }
 
-    pub fn as_scheme_id(&self, compression_version: CompressionVersion) -> Option<u8> {
+    pub fn as_scheme_id(self, compression_version: CompressionVersion) -> Option<u8> {
         match (self, compression_version) {
             (Self::None, _) => Some(0),
             (Self::LZO1x, CompressionVersion::V4 | CompressionVersion::V5) => Some(1),
@@ -87,7 +87,7 @@ impl CompressionScheme {
     }
 }
 
-const XMEMCOMPRESS_LZXNATIVE_SIGNATURE: u32 = 0x0FF512EE;
+const XMEMCOMPRESS_LZXNATIVE_SIGNATURE: u32 = 0x0FF5_12EE;
 const XMEMCOMPRESS_VERSION: u16 = 0x0103;
 const XMEMCOMPRESS_RESERVED: u16 = 0x0;
 const XMEMCOMPRESS_CONTEXT_FLAGS: u32 = 0x0;

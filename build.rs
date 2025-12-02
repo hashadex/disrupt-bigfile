@@ -6,10 +6,10 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 
 fn fnv1_hash(bytes: &[u8]) -> u64 {
-    let mut hash: u64 = 0xCBF29CE484222325; // Set hash to default seed
+    let mut hash: u64 = 0xCBF2_9CE4_8422_2325; // Set hash to default seed
 
     for &byte in bytes {
-        hash = hash.wrapping_mul(0x100000001B3);
+        hash = hash.wrapping_mul(0x0100_0000_01B3);
         hash ^= u64::from(byte);
     }
 
@@ -39,7 +39,7 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
                 continue;
             }
 
-            let hash32 = fnv1_hash(line.to_lowercase().as_bytes()) & 0xFFFFFFFF;
+            let hash32 = fnv1_hash(line.to_lowercase().as_bytes()) & 0xFFFF_FFFF;
 
             if colliding_hashes.contains(&hash32) {
                 continue;
