@@ -13,3 +13,6 @@ phf = "0.13.1"
 [build-dependencies]
 phf = "0.13.1"
 phf_codegen = "0.13.1"
+
+[lints.clippy]
+pedantic = "warn"
