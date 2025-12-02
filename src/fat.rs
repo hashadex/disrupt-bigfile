@@ -390,7 +390,7 @@ impl Entry {
             .expect("name_hash <= Entry::V8_MAX_NAME_HASH, so it should fit into u32");
         let compression_scheme_id: u32 = self
             .compression_scheme
-            .to_scheme_id(compression_version)
+            .as_scheme_id(compression_version)
             .ok_or(FatSerializationError::UnsupportedCompressionScheme {
                 scheme: self.compression_scheme,
                 version: compression_version,
