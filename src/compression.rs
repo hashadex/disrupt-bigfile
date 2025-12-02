@@ -4,7 +4,7 @@ use std::io::{self, Read, Seek, Write};
 use byteorder::{BE, ReadBytesExt};
 use lzxd::{self, Lzxd, WindowSize};
 
-use crate::FatDeserializationError;
+use crate::fat::FatDeserializationError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CompressionVersion {

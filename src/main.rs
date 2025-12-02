@@ -6,7 +6,8 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use indicatif::ProgressIterator;
 
-use disrupt_bigfile::{Dat, Fat};
+use disrupt_bigfile::dat::Dat;
+use disrupt_bigfile::fat::Fat;
 
 fn existing_file(source: &str) -> Result<PathBuf, String> {
     let path = Path::new(source);
