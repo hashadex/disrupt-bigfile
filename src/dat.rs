@@ -49,7 +49,7 @@ impl<R: Read + Seek> Dat<R> {
         self.inner
     }
 
-    pub fn raw_entry_data(&mut self, entry: Entry) -> Result<Take<&mut R>, UnpackError> {
+    pub fn raw_entry_data(&mut self, entry: Entry) -> Result<Take<&mut R>, io::Error> {
         self.inner.seek(SeekFrom::Start(entry.offset))?;
         Ok((&mut self.inner).take(entry.compressed_size.into()))
     }
