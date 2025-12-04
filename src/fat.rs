@@ -363,6 +363,20 @@ impl FatMetadata {
     };
 }
 
+impl fmt::Display for FatMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}, Entry {}, Platform {}, Compression {}, Name hash {}",
+            self.fat_version,
+            self.entry_version,
+            self.platform,
+            self.compression_version,
+            self.name_hash_version
+        )
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Entry {
     pub name_hash: u64,
