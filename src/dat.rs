@@ -4,8 +4,8 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom, Take, Write};
 use std::path::{Path, PathBuf};
 
-use crate::compression::{self, CompressionScheme, XMemCompressError};
-use crate::fat::Entry;
+use crate::compression::{self, XMemCompressError};
+use crate::fat::{CompressionScheme, Entry};
 
 #[derive(Debug)]
 pub enum UnpackError {

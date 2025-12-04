@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 
-use crate::compression::{CompressionScheme, CompressionVersion};
 use crate::filelists;
 
 const FAT3_MAGIC: u32 = 0x4641_5433;
@@ -260,6 +259,87 @@ impl fmt::Display for NameHashVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::V50 => write!(f, "V50"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CompressionVersion {
+    V0,
+    V4,
+    V5,
+}
+
+impl TryFrom<u8> for CompressionVersion {
+    type Error = FatDeserializationError;
+
+    fn try_from(value: u8) -> Result<Self, FatDeserializationError> {
+        match value {
+            0 => Ok(Self::V0),
+            4 => Ok(Self::V4),
+            5 => Ok(Self::V5),
+            _ => Err(Self::Error::UnknownCompressionVersion(value)),
+        }
+    }
+}
+
+impl From<CompressionVersion> for u8 {
+    fn from(version: CompressionVersion) -> Self {
+        match version {
+            CompressionVersion::V0 => 0,
+            CompressionVersion::V4 => 4,
+            CompressionVersion::V5 => 5,
+        }
+    }
+}
+
+impl fmt::Display for CompressionVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::V0 => write!(f, "V0"),
+            Self::V4 => write!(f, "V4"),
+            Self::V5 => write!(f, "V5"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CompressionScheme {
+    None,
+    LZO1x,
+    Zlib,
+    XMemCompress,
+}
+
+impl fmt::Display for CompressionScheme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::None => write!(f, "no compression"),
+            Self::LZO1x => write!(f, "LZO1x"),
+            Self::Zlib => write!(f, "Zlib"),
+            Self::XMemCompress => write!(f, "XMemCompress"),
+        }
+    }
+}
+
+impl CompressionScheme {
+    pub fn from_scheme_id(scheme_id: u8, compression_version: CompressionVersion) -> Option<Self> {
+        match (scheme_id, compression_version) {
+            (0, _) => Some(Self::None),
+            (1, CompressionVersion::V4 | CompressionVersion::V5) => Some(Self::LZO1x),
+            (2, CompressionVersion::V4 | CompressionVersion::V5) => Some(Self::Zlib),
+            (3, CompressionVersion::V5) => Some(Self::XMemCompress),
+            _ => None,
+        }
+    }
+
+    pub fn as_scheme_id(self, compression_version: CompressionVersion) -> Option<u8> {
+        match (self, compression_version) {
+            (Self::None, _) => Some(0),
+            (Self::LZO1x, CompressionVersion::V4 | CompressionVersion::V5) => Some(1),
+            (Self::Zlib, CompressionVersion::V4 | CompressionVersion::V5) => Some(2),
+            (Self::XMemCompress, CompressionVersion::V5) => Some(3),
+            _ => None,
         }
     }
 }
