@@ -22,7 +22,7 @@ fn existing_file(source: &str) -> Result<PathBuf, String> {
 
 #[derive(Debug, Subcommand)]
 enum Action {
-    /// Display info about a FAT
+    /// Display info from a FAT's header
     Info {
         /// Path to a FAT file
         #[arg(value_parser = existing_file)]
