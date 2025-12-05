@@ -117,6 +117,11 @@ fn unpack(
     let fat = Fat::open(&fat_path)?;
     let mut dat = Dat::open(&dat_path)?;
 
+    eprintln!("Unpacking {} entries from...", fat.entries.len());
+    eprintln!("\tFAT: {}", fat_path.display());
+    eprintln!("\tDAT: {}\n", dat_path.display());
+    eprintln!("FAT info: {}", fat.metadata);
+
     for entry in fat.entries.iter().progress() {
         dat.unpack_to_dir(*entry, &out_dir)
             .map_err(|err| format!("failed to unpack {}: {err}", entry.path().display()))?;
