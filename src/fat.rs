@@ -123,7 +123,7 @@ impl fmt::Display for FatSerializationError {
 
 impl error::Error for FatSerializationError {}
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum FatVersion {
     Fat3,
 }
@@ -147,7 +147,7 @@ impl fmt::Display for FatVersion {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum EntryVersion {
     V8,
 }
@@ -179,7 +179,7 @@ impl fmt::Display for EntryVersion {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Platform {
     Any,
     Win32,
@@ -231,7 +231,7 @@ impl fmt::Display for Platform {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum NameHashVersion {
     V50,
 }
@@ -263,7 +263,7 @@ impl fmt::Display for NameHashVersion {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CompressionVersion {
     V0,
     V4,
@@ -303,7 +303,7 @@ impl fmt::Display for CompressionVersion {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CompressionScheme {
     None,
     LZO1x,
@@ -344,7 +344,7 @@ impl CompressionScheme {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct FatMetadata {
     pub fat_version: FatVersion,
     pub entry_version: EntryVersion,
@@ -377,7 +377,7 @@ impl fmt::Display for FatMetadata {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Entry {
     pub name_hash: u64,
     pub offset: u64,
@@ -552,7 +552,7 @@ impl fmt::Display for Entry {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Fat {
     pub metadata: FatMetadata,
     pub entries: Vec<Entry>,
