@@ -27,6 +27,10 @@ enum Action {
         /// Path to a FAT file
         #[arg(value_parser = existing_file)]
         fat: PathBuf,
+
+        /// Print out info in a short one-line format
+        #[arg(short, long)]
+        short: bool
     },
     /// List files in a FAT without unpacking anything
     List {
@@ -61,24 +65,28 @@ struct Args {
     action: Action,
 }
 
-fn info(fat_path: PathBuf) -> Result<(), Box<dyn Error>> {
+fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
     let fat = Fat::open(&fat_path)?;
     let metadata = fat.metadata;
 
-    println!(
-        "{}\n",
-        fat_path
-            .file_name()
-            .expect("existing_file() should guarantee that fat_path has a filename")
-            .display()
-    );
+    if short {
+        println!("{metadata}");
+    } else {
+        println!(
+            "{}\n",
+            fat_path
+                .file_name()
+                .expect("existing_file() should guarantee that fat_path has a filename")
+                .display()
+        );
 
-    println!("FAT version:         {}", metadata.fat_version);
-    println!("Entry version:       {}", metadata.entry_version);
-    println!("Platform:            {}", metadata.platform);
-    println!("Compression version: {}", metadata.compression_version);
-    println!("Name hash version:   {}", metadata.name_hash_version);
-    println!("Entry count:         {}", fat.entries.len());
+        println!("FAT version:         {}", metadata.fat_version);
+        println!("Entry version:       {}", metadata.entry_version);
+        println!("Platform:            {}", metadata.platform);
+        println!("Compression version: {}", metadata.compression_version);
+        println!("Name hash version:   {}", metadata.name_hash_version);
+        println!("Entry count:         {}", fat.entries.len());
+    }
 
     Ok(())
 }
@@ -134,7 +142,7 @@ fn main() -> ExitCode {
     let args = Args::parse();
 
     let action_result: Result<(), Box<dyn Error>> = match args.action {
-        Action::Info { fat } => info(fat),
+        Action::Info { fat, short } => info(fat, short),
         Action::List { fat, verbose } => list(fat, verbose),
         Action::Unpack { fat, dat, out } => unpack(fat, dat, out),
     };
