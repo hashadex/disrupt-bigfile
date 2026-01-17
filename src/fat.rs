@@ -440,9 +440,7 @@ impl Entry {
         })
     }
 
-    // const V8_MAX_NAME_HASH: u64 = u32::MAX.into();
-    // https://github.com/rust-lang/rust/issues/143874
-    const V8_MAX_NAME_HASH: u64 = 2u64.pow(32);
+    const V8_MAX_NAME_HASH: u64 = u32::MAX as u64;
     const V8_MAX_OFFSET: u64 = 2u64.pow(35);
     const V8_MAX_SIZE: u32 = 2u32.pow(29);
 
