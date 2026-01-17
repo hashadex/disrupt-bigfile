@@ -135,22 +135,23 @@ pub fn decompress_xmemcompress(
         // Each chunk in the 0F F5 12 EE format has two headers: external and internal.
         //
         // 1. External header:
-        //    * Contains the total size (including the internal header) of the chunk that follows
-        //      as a u32.
+        //     * Contains the total size (including the internal header) of the chunk that follows
+        //       as a u32.
         // 2. Internal header:
-        //    * Begins with an optional 0xFF prefix.
-        //    * If 0xFF is present, the next 2 bytes store the chunk’s uncompressed size
-        //      (usually 32 KiB). If 0xFF is absent, the uncompressed size implicitly defaults to
-        //      32 KiB.
-        //    * After the optional uncompressed-size field, the internal header *also* stores the
-        //      compressed length of the chunk, for some odd reason.
+        //     * Begins with an optional 0xFF prefix.
+        //     * If 0xFF is present, the next 2 bytes store the chunk's uncompressed size
+        //       (usually 32 KiB). If 0xFF is absent, the uncompressed size implicitly defaults to
+        //       32 KiB.
+        //     * After the optional uncompressed size field, the internal header *also* stores the
+        //       compressed length of the chunk, for some odd reason.
         //
-        // The compressed length in the internal header is always 10 bytes smaller than the
-        // length from the external header. This is because the internal length value excludes:
-        //    * the 5-byte internal header itself, and
-        //    * the 5 trailing 0x00 bytes after each chunk.
+        // The conpressed length in the internal header seems to be always 10 bytes smaller than
+        // the length from the external header. This is because the internal length value excludes:
+        //     * the 5 byte internal header itself, and
+        //     * the 5 trailing 0x00 bytes after each chunk.
         //
-        // We will ignore the size from the internal header here to keep the alignment to chunks.
+        // We will ignore the size from the internal header to keep the reader aligned to "external"
+        // chunks.
 
         let chunk_size = compressed_data.read_u32::<BE>()?;
 
