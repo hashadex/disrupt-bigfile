@@ -79,7 +79,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         } else if path.starts_with("__DUPLICATE") {
             todo!();
         } else {
-            let windows_path = path.to_string_lossy().replace('/', "\\");
+            let windows_path = path.to_string_lossy().to_lowercase().replace('/', "\\");
 
             hash = Self::FNV1_SEED;
 
