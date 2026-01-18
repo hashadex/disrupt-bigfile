@@ -304,6 +304,39 @@ impl fmt::Display for CompressionVersion {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct FatMetadata {
+    pub fat_version: FatVersion,
+    pub entry_version: EntryVersion,
+    pub platform: Platform,
+    pub compression_version: CompressionVersion,
+    pub name_hash_version: NameHashVersion,
+}
+
+impl FatMetadata {
+    pub const WD1_WIN64: FatMetadata = FatMetadata {
+        fat_version: FatVersion::Fat3,
+        entry_version: EntryVersion::V8,
+        platform: Platform::Win64,
+        compression_version: CompressionVersion::V5,
+        name_hash_version: NameHashVersion::V50,
+    };
+}
+
+impl fmt::Display for FatMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}, Entry {}, Platform {}, Compression {}, Name hash {}",
+            self.fat_version,
+            self.entry_version,
+            self.platform,
+            self.compression_version,
+            self.name_hash_version
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CompressionScheme {
     None,
     LZO1x,
@@ -341,39 +374,6 @@ impl CompressionScheme {
             (Self::XMemCompress, CompressionVersion::V5) => Some(3),
             _ => None,
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct FatMetadata {
-    pub fat_version: FatVersion,
-    pub entry_version: EntryVersion,
-    pub platform: Platform,
-    pub compression_version: CompressionVersion,
-    pub name_hash_version: NameHashVersion,
-}
-
-impl FatMetadata {
-    pub const WD1_WIN64: FatMetadata = FatMetadata {
-        fat_version: FatVersion::Fat3,
-        entry_version: EntryVersion::V8,
-        platform: Platform::Win64,
-        compression_version: CompressionVersion::V5,
-        name_hash_version: NameHashVersion::V50,
-    };
-}
-
-impl fmt::Display for FatMetadata {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}, Entry {}, Platform {}, Compression {}, Name hash {}",
-            self.fat_version,
-            self.entry_version,
-            self.platform,
-            self.compression_version,
-            self.name_hash_version
-        )
     }
 }
 
