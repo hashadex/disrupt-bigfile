@@ -488,6 +488,12 @@ impl Entry {
                 version: compression_version,
             })?
             .into();
+        // See comment in deserialize_v8()
+        let uncompressed_size = match self.compression_scheme {
+            CompressionScheme::None => 0,
+            _ => self.uncompressed_size,
+        };
+
         let offset_last_3_bits: u32 = (self.offset & 0b111)
             .try_into()
             .expect("u64 & 0b111 should always fit into u32");
@@ -496,7 +502,7 @@ impl Entry {
             .expect("35 bit int >> 3 should always fit into u32");
 
         let a = name_hash;
-        let b = (self.uncompressed_size << 3) | compression_scheme_id;
+        let b = (uncompressed_size << 3) | compression_scheme_id;
         let c = (offset_last_3_bits << 29) | self.compressed_size;
         let d = offset_first_32_bits;
 
