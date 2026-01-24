@@ -5,6 +5,7 @@ use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
+use clap::ValueEnum;
 
 use crate::filelists;
 
@@ -123,8 +124,9 @@ impl fmt::Display for FatSerializationError {
 
 impl error::Error for FatSerializationError {}
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum FatVersion {
+    #[value(name = "v3")]
     Fat3,
 }
 
@@ -147,7 +149,7 @@ impl fmt::Display for FatVersion {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum EntryVersion {
     V8,
 }
@@ -179,7 +181,7 @@ impl fmt::Display for EntryVersion {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum Platform {
     Any,
     Win32,
@@ -231,7 +233,7 @@ impl fmt::Display for Platform {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum NameHashVersion {
     V50,
 }
@@ -263,7 +265,7 @@ impl fmt::Display for NameHashVersion {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum CompressionVersion {
     V0,
     V4,

@@ -1,13 +1,19 @@
 use std::error::Error;
+use std::ffi::OsString;
+use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
-use indicatif::ProgressIterator;
+use clap::{Parser, Subcommand, ValueEnum};
+use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
+use walkdir::WalkDir;
 
+use disrupt_bigfile::builder::ArchiveBuilder;
 use disrupt_bigfile::dat::Dat;
-use disrupt_bigfile::fat::Fat;
+use disrupt_bigfile::fat::{
+    CompressionVersion, EntryVersion, Fat, FatMetadata, FatVersion, NameHashVersion, Platform,
+};
 
 fn existing_file(source: &str) -> Result<PathBuf, String> {
     let path = Path::new(source);
@@ -17,6 +23,32 @@ fn existing_file(source: &str) -> Result<PathBuf, String> {
         Ok(path.to_path_buf())
     } else {
         Err("is not a file".to_string())
+    }
+}
+
+fn existing_dir(source: &str) -> Result<PathBuf, String> {
+    let path = Path::new(source);
+    let metadata = path.metadata().map_err(|err| err.to_string())?;
+
+    if metadata.is_dir() {
+        Ok(path.to_path_buf())
+    } else {
+        Err("is not a directory".to_string())
+    }
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+enum Preset {
+    Wd1Sound,
+    Wd1Win64,
+}
+
+impl From<Preset> for FatMetadata {
+    fn from(preset: Preset) -> Self {
+        match preset {
+            Preset::Wd1Sound => Self::WD1_SOUND,
+            Preset::Wd1Win64 => Self::WD1_WIN64,
+        }
     }
 }
 
@@ -30,7 +62,7 @@ enum Action {
 
         /// Print out info in a short one-line format
         #[arg(short, long)]
-        short: bool
+        short: bool,
     },
     /// List files in a FAT without unpacking anything
     List {
@@ -55,6 +87,58 @@ enum Action {
         /// Path to the output directory.
         #[arg(short, long, default_value = "./out/")]
         out: PathBuf,
+    },
+    /// Create a BigFile from a directory
+    Pack {
+        /// Path to the directory
+        #[arg(value_parser = existing_dir)]
+        dir: PathBuf,
+
+        /// Path to the directory where the DAT and FAT will be created
+        ///
+        /// If this directory does not exist, it will be created.
+        #[arg(short, long, default_value = "./out/")]
+        out: PathBuf,
+
+        /// Filename of the DAT and FAT
+        #[arg(long)]
+        name: Option<OsString>,
+
+        /// FAT version. FAT3 is used in WD1, and FAT5 is used in WD2 and Legion.
+        #[arg(short, long)]
+        fat_version: Option<FatVersion>,
+
+        /// Version of the file entries inside FAT
+        #[arg(short, long)]
+        entry_version: Option<EntryVersion>,
+
+        /// Platform that the archive targets
+        #[arg(short, long)]
+        platform: Option<Platform>,
+
+        /// Compression version
+        ///
+        /// Changes which compression schemes are available and their IDs.
+        #[arg(short, long)]
+        compression_version: Option<CompressionVersion>,
+
+        /// Name hash version
+        ///
+        /// Does not seem to affect anything.
+        #[arg(short, long)]
+        name_hash_version: Option<NameHashVersion>,
+
+        /// Preset for FAT metadata
+        ///
+        /// Manually specifying a metadata field using a flag such as --fat-version, --platform
+        /// will override the preset.
+        ///
+        /// wd1-win64: Used by all archives except "sound*" archives in the Windows version of
+        /// Watch Dogs 1.
+        ///
+        /// wd1-sound: Used by "sound*" archives in the Windows version of Watch Dogs 1.
+        #[arg(short = 'P', long, default_value = "wd1-win64")]
+        preset: Preset,
     },
 }
 
@@ -138,6 +222,77 @@ fn unpack(
     Ok(())
 }
 
+fn pack(
+    in_dir: PathBuf,
+    out_dir: PathBuf,
+    archive_name: Option<OsString>,
+    preset: Preset,
+    fat_version: Option<FatVersion>,
+    entry_version: Option<EntryVersion>,
+    platform: Option<Platform>,
+    compression_version: Option<CompressionVersion>,
+    name_hash_version: Option<NameHashVersion>,
+) -> Result<(), Box<dyn Error>> {
+    let preset: FatMetadata = preset.into();
+
+    let fat_version = fat_version.unwrap_or(preset.fat_version);
+    let entry_version = entry_version.unwrap_or(preset.entry_version);
+    let compression_version = compression_version.unwrap_or(preset.compression_version);
+    let platform = platform.unwrap_or(preset.platform);
+    let name_hash_version = name_hash_version.unwrap_or(preset.name_hash_version);
+
+    let metadata = FatMetadata {
+        fat_version,
+        entry_version,
+        compression_version,
+        platform,
+        name_hash_version,
+    };
+
+    eprintln!("FAT info: {metadata}\n");
+
+    let archive_name = archive_name
+        .or_else(|| out_dir.file_stem().map(OsString::from))
+        .unwrap_or("out".into());
+
+    fs::create_dir_all(&out_dir)?;
+
+    let outfiles_base_path: PathBuf = [out_dir, archive_name.into()].iter().collect();
+    let fat_path = outfiles_base_path.with_extension("fat");
+    let dat_path = outfiles_base_path.with_extension("dat");
+
+    eprintln!("Packing {} to...", in_dir.display());
+    eprintln!("\tFAT: {}", fat_path.display());
+    eprintln!("\tDAT: {}", dat_path.display());
+
+    let mut builder = ArchiveBuilder::create(metadata, &dat_path)?;
+
+    let spinner = ProgressBar::no_length().with_style(
+        ProgressStyle::with_template("{spinner} Packed files: {pos}")
+            .expect("Hardcoded template should always be valid"),
+    );
+    for entry in WalkDir::new(&in_dir) {
+        let entry = entry?;
+        if entry.file_type().is_dir() {
+            continue;
+        }
+
+        let relative_entry_path = entry.path().strip_prefix(&in_dir)?;
+
+        builder
+            .add_file(&in_dir, &relative_entry_path)
+            .map_err(|err| format!("failed to add {}: {err}", entry.path().display()))?;
+
+        spinner.inc(1);
+    }
+
+    builder.create_fat(&fat_path)?;
+
+    spinner.finish_and_clear();
+
+    Ok(())
+}
+
 fn main() -> ExitCode {
     let args = Args::parse();
 
@@ -145,6 +300,27 @@ fn main() -> ExitCode {
         Action::Info { fat, short } => info(fat, short),
         Action::List { fat, verbose } => list(fat, verbose),
         Action::Unpack { fat, dat, out } => unpack(fat, dat, out),
+        Action::Pack {
+            dir,
+            out,
+            name,
+            fat_version,
+            entry_version,
+            platform,
+            compression_version,
+            name_hash_version,
+            preset,
+        } => pack(
+            dir,
+            out,
+            name,
+            preset,
+            fat_version,
+            entry_version,
+            platform,
+            compression_version,
+            name_hash_version,
+        ),
     };
 
     match action_result {
