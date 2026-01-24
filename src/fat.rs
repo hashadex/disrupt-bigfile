@@ -320,6 +320,14 @@ impl FatMetadata {
         compression_version: CompressionVersion::V5,
         name_hash_version: NameHashVersion::V50,
     };
+
+    pub const WD1_SOUND: FatMetadata = FatMetadata {
+        fat_version: FatVersion::Fat3,
+        entry_version: EntryVersion::V8,
+        platform: Platform::Any,
+        compression_version: CompressionVersion::V0,
+        name_hash_version: NameHashVersion::V50,
+    };
 }
 
 impl fmt::Display for FatMetadata {
