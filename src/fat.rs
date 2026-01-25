@@ -10,13 +10,17 @@ use clap::ValueEnum;
 use crate::filelists;
 
 const FAT3_MAGIC: u32 = 0x4641_5433;
+const FAT5_MAGIC: u32 = 0x4641_5435;
 
 #[derive(Debug)]
 pub enum FatDeserializationError {
     Io(io::Error),
     BadMagic(u32),
     UnknownEntryVersion(u32),
-    UnknownPlatformId(u8),
+    UnsupportedPlatformId {
+        platform_id: u8,
+        fat_version: FatVersion,
+    },
     UnknownCompressionVersion(u8),
     UnknownNameHashVersion(u8),
     UnexpectedPaddingByte(u8),
@@ -37,12 +41,21 @@ impl fmt::Display for FatDeserializationError {
         match self {
             Self::Io(err) => write!(f, "io error: {err}"),
             Self::BadMagic(magic) => {
-                write!(f, "bad magic 0x{magic:X}, expected 0x{FAT3_MAGIC:X}")
+                write!(
+                    f,
+                    "bad magic 0x{magic:X}, expected 0x{FAT3_MAGIC:X} or 0x{FAT5_MAGIC:X}"
+                )
             }
             Self::UnknownEntryVersion(version) => {
                 write!(f, "unknown entry version {version}")
             }
-            Self::UnknownPlatformId(id) => write!(f, "unknown platform id {id}"),
+            Self::UnsupportedPlatformId {
+                platform_id,
+                fat_version,
+            } => write!(
+                f,
+                "platform id {platform_id} is not supported for {fat_version}"
+            ),
             Self::UnknownCompressionVersion(version) => {
                 write!(f, "unknown compression version {version}")
             }
@@ -68,9 +81,13 @@ impl error::Error for FatDeserializationError {}
 #[derive(Debug)]
 pub enum FatSerializationError {
     Io(io::Error),
+    UnsupportedPlatform {
+        platform: Platform,
+        fat_version: FatVersion,
+    },
     UnsupportedCompressionScheme {
         scheme: CompressionScheme,
-        version: CompressionVersion,
+        compression_version: CompressionVersion,
     },
     EntryCountWontFit(usize),
     NameHashWontFit {
@@ -97,9 +114,16 @@ impl fmt::Display for FatSerializationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(f, "io error: {err}"),
-            Self::UnsupportedCompressionScheme { scheme, version } => write!(
+            Self::UnsupportedPlatform {
+                platform,
+                fat_version,
+            } => write!(f, "platform {platform} is not supported by {fat_version}"),
+            Self::UnsupportedCompressionScheme {
+                scheme,
+                compression_version,
+            } => write!(
                 f,
-                "compression scheme {scheme} is not supported by compression version {version}"
+                "compression scheme {scheme} is not supported by compression version {compression_version}"
             ),
             Self::EntryCountWontFit(count) => write!(
                 f,
@@ -128,6 +152,9 @@ impl error::Error for FatSerializationError {}
 pub enum FatVersion {
     #[value(name = "v3")]
     Fat3,
+
+    #[value(name = "v5")]
+    Fat5,
 }
 
 impl TryFrom<u32> for FatVersion {
@@ -136,6 +163,7 @@ impl TryFrom<u32> for FatVersion {
     fn try_from(magic: u32) -> Result<Self, Self::Error> {
         match magic {
             FAT3_MAGIC => Ok(Self::Fat3),
+            FAT5_MAGIC => Ok(Self::Fat5),
             _ => Err(Self::Error::BadMagic(magic)),
         }
     }
@@ -145,13 +173,17 @@ impl fmt::Display for FatVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Fat3 => write!(f, "FAT3"),
+            Self::Fat5 => write!(f, "FAT5"),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum EntryVersion {
+    V7,
     V8,
+    V11,
+    V13,
 }
 
 impl TryFrom<u32> for EntryVersion {
@@ -159,7 +191,10 @@ impl TryFrom<u32> for EntryVersion {
 
     fn try_from(version: u32) -> Result<Self, Self::Error> {
         match version {
+            7 => Ok(Self::V7),
             8 => Ok(Self::V8),
+            11 => Ok(Self::V11),
+            13 => Ok(Self::V13),
             _ => Err(Self::Error::UnknownEntryVersion(version)),
         }
     }
@@ -168,7 +203,10 @@ impl TryFrom<u32> for EntryVersion {
 impl From<EntryVersion> for u32 {
     fn from(version: EntryVersion) -> Self {
         match version {
+            EntryVersion::V7 => 7,
             EntryVersion::V8 => 8,
+            EntryVersion::V11 => 11,
+            EntryVersion::V13 => 13,
         }
     }
 }
@@ -176,7 +214,10 @@ impl From<EntryVersion> for u32 {
 impl fmt::Display for EntryVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::V7 => write!(f, "V7"),
             Self::V8 => write!(f, "V8"),
+            Self::V11 => write!(f, "V11"),
+            Self::V13 => write!(f, "V13"),
         }
     }
 }
@@ -189,33 +230,41 @@ pub enum Platform {
     Ps3,
     Win64,
     WiiU,
+    Orbis,
 }
 
-impl TryFrom<u8> for Platform {
-    type Error = FatDeserializationError;
-
-    fn try_from(id: u8) -> Result<Self, Self::Error> {
-        match id {
-            0 => Ok(Self::Any),
-            1 => Ok(Self::Win32),
-            2 => Ok(Self::Xenon),
-            3 => Ok(Self::Ps3),
-            4 => Ok(Self::Win64),
-            8 => Ok(Self::WiiU),
-            _ => Err(Self::Error::UnknownPlatformId(id)),
+impl Platform {
+    pub fn from_platform_id(
+        platform_id: u8,
+        fat_version: FatVersion,
+    ) -> Result<Self, FatDeserializationError> {
+        match (fat_version, platform_id) {
+            (_, 0) => Ok(Self::Any),
+            (FatVersion::Fat3, 1) => Ok(Self::Win32),
+            (FatVersion::Fat3, 2) => Ok(Self::Xenon),
+            (FatVersion::Fat3, 3) => Ok(Self::Ps3),
+            (FatVersion::Fat3, 4) | (FatVersion::Fat5, 1) => Ok(Self::Win64),
+            (FatVersion::Fat3, 8) => Ok(Self::WiiU),
+            (FatVersion::Fat5, 3) => Ok(Self::Orbis),
+            _ => Err(FatDeserializationError::UnsupportedPlatformId {
+                platform_id,
+                fat_version,
+            }),
         }
     }
-}
 
-impl From<Platform> for u8 {
-    fn from(platform: Platform) -> Self {
-        match platform {
-            Platform::Any => 0,
-            Platform::Win32 => 1,
-            Platform::Xenon => 2,
-            Platform::Ps3 => 3,
-            Platform::Win64 => 4,
-            Platform::WiiU => 8,
+    pub fn as_platform_id(self, fat_version: FatVersion) -> Result<u8, FatSerializationError> {
+        match (fat_version, self) {
+            (_, Self::Any) => Ok(0),
+            (FatVersion::Fat3, Self::Win32) | (FatVersion::Fat5, Self::Win64) => Ok(1),
+            (FatVersion::Fat3, Self::Xenon) => Ok(2),
+            (FatVersion::Fat3, Self::Ps3) | (FatVersion::Fat5, Self::Orbis) => Ok(3),
+            (FatVersion::Fat3, Self::Win64) => Ok(4),
+            (FatVersion::Fat3, Self::WiiU) => Ok(8),
+            _ => Err(FatSerializationError::UnsupportedPlatform {
+                platform: self,
+                fat_version,
+            }),
         }
     }
 }
@@ -229,6 +278,7 @@ impl fmt::Display for Platform {
             Self::Ps3 => write!(f, "PS3"),
             Self::Win64 => write!(f, "Win64"),
             Self::WiiU => write!(f, "WiiU"),
+            Self::Orbis => write!(f, "Orbis"),
         }
     }
 }
@@ -236,6 +286,9 @@ impl fmt::Display for Platform {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum NameHashVersion {
     V50,
+    V55,
+    V58,
+    V70,
 }
 
 impl TryFrom<u8> for NameHashVersion {
@@ -244,6 +297,9 @@ impl TryFrom<u8> for NameHashVersion {
     fn try_from(version: u8) -> Result<Self, Self::Error> {
         match version {
             50 => Ok(Self::V50),
+            55 => Ok(Self::V55),
+            58 => Ok(Self::V58),
+            70 => Ok(Self::V70),
             _ => Err(Self::Error::UnknownNameHashVersion(version)),
         }
     }
@@ -253,6 +309,9 @@ impl From<NameHashVersion> for u8 {
     fn from(version: NameHashVersion) -> Self {
         match version {
             NameHashVersion::V50 => 50,
+            NameHashVersion::V55 => 55,
+            NameHashVersion::V58 => 58,
+            NameHashVersion::V70 => 70,
         }
     }
 }
@@ -261,6 +320,9 @@ impl fmt::Display for NameHashVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::V50 => write!(f, "V50"),
+            NameHashVersion::V55 => write!(f, "V55"),
+            NameHashVersion::V58 => write!(f, "V58"),
+            NameHashVersion::V70 => write!(f, "V70"),
         }
     }
 }
@@ -270,6 +332,9 @@ pub enum CompressionVersion {
     V0,
     V4,
     V5,
+    V6,
+    V8,
+    V9,
 }
 
 impl TryFrom<u8> for CompressionVersion {
@@ -280,6 +345,9 @@ impl TryFrom<u8> for CompressionVersion {
             0 => Ok(Self::V0),
             4 => Ok(Self::V4),
             5 => Ok(Self::V5),
+            6 => Ok(Self::V6),
+            8 => Ok(Self::V8),
+            9 => Ok(Self::V9),
             _ => Err(Self::Error::UnknownCompressionVersion(value)),
         }
     }
@@ -291,6 +359,9 @@ impl From<CompressionVersion> for u8 {
             CompressionVersion::V0 => 0,
             CompressionVersion::V4 => 4,
             CompressionVersion::V5 => 5,
+            CompressionVersion::V6 => 6,
+            CompressionVersion::V8 => 8,
+            CompressionVersion::V9 => 9,
         }
     }
 }
@@ -301,6 +372,9 @@ impl fmt::Display for CompressionVersion {
             Self::V0 => write!(f, "V0"),
             Self::V4 => write!(f, "V4"),
             Self::V5 => write!(f, "V5"),
+            Self::V6 => write!(f, "V6"),
+            Self::V8 => write!(f, "V8"),
+            Self::V9 => write!(f, "V9"),
         }
     }
 }
@@ -352,6 +426,9 @@ pub enum CompressionScheme {
     LZO1x,
     Zlib,
     XMemCompress,
+    LZMA,
+    LZ4LW,
+    Oodle,
 }
 
 impl fmt::Display for CompressionScheme {
@@ -361,28 +438,58 @@ impl fmt::Display for CompressionScheme {
             Self::LZO1x => write!(f, "LZO1x"),
             Self::Zlib => write!(f, "Zlib"),
             Self::XMemCompress => write!(f, "XMemCompress"),
+            Self::LZMA => write!(f, "LZMA"),
+            Self::LZ4LW => write!(f, "LZ4LW"),
+            Self::Oodle => write!(f, "Oodle"),
         }
     }
 }
 
 impl CompressionScheme {
-    pub fn from_scheme_id(scheme_id: u8, compression_version: CompressionVersion) -> Option<Self> {
+    pub fn from_scheme_id(
+        scheme_id: u8,
+        compression_version: CompressionVersion,
+    ) -> Result<Self, FatDeserializationError> {
         match (scheme_id, compression_version) {
-            (0, _) => Some(Self::None),
-            (1, CompressionVersion::V4 | CompressionVersion::V5) => Some(Self::LZO1x),
-            (2, CompressionVersion::V4 | CompressionVersion::V5) => Some(Self::Zlib),
-            (3, CompressionVersion::V5) => Some(Self::XMemCompress),
-            _ => None,
+            (0, _) => Ok(Self::None),
+            (1, CompressionVersion::V4 | CompressionVersion::V5) => Ok(Self::LZO1x),
+            (2, CompressionVersion::V4 | CompressionVersion::V5) => Ok(Self::Zlib),
+            (3, CompressionVersion::V5) => Ok(Self::XMemCompress),
+            (1, CompressionVersion::V6) | (2, CompressionVersion::V8 | CompressionVersion::V9) => {
+                Ok(Self::LZMA)
+            }
+            (2, CompressionVersion::V6) | (3, CompressionVersion::V8 | CompressionVersion::V9) => {
+                Ok(Self::LZ4LW)
+            }
+            _ => Err(FatDeserializationError::UnknownCompressionScheme {
+                scheme_id,
+                compression_version,
+            }),
         }
     }
 
-    pub fn as_scheme_id(self, compression_version: CompressionVersion) -> Option<u8> {
+    pub fn as_scheme_id(
+        self,
+        compression_version: CompressionVersion,
+    ) -> Result<u8, FatSerializationError> {
         match (self, compression_version) {
-            (Self::None, _) => Some(0),
-            (Self::LZO1x, CompressionVersion::V4 | CompressionVersion::V5) => Some(1),
-            (Self::Zlib, CompressionVersion::V4 | CompressionVersion::V5) => Some(2),
-            (Self::XMemCompress, CompressionVersion::V5) => Some(3),
-            _ => None,
+            (Self::None, _) => Ok(0),
+
+            (Self::LZO1x, CompressionVersion::V4 | CompressionVersion::V5)
+            | (Self::LZMA, CompressionVersion::V6)
+            | (Self::Oodle, CompressionVersion::V8 | CompressionVersion::V9) => Ok(1),
+
+            (Self::Zlib, CompressionVersion::V4 | CompressionVersion::V5)
+            | (Self::LZ4LW, CompressionVersion::V6)
+            | (Self::LZMA, CompressionVersion::V8 | CompressionVersion::V9) => Ok(2),
+
+            (Self::XMemCompress, CompressionVersion::V5)
+            | (Self::LZ4LW, CompressionVersion::V8 | CompressionVersion::V9) => Ok(3),
+
+            _ => Err(FatSerializationError::UnsupportedCompressionScheme {
+                scheme: self,
+                compression_version,
+            }),
         }
     }
 }
@@ -427,12 +534,7 @@ impl Entry {
         let compressed_size = c & 0x1FFF_FFFF;
 
         let compression_scheme =
-            CompressionScheme::from_scheme_id(compression_scheme_id, compression_version).ok_or(
-                FatDeserializationError::UnknownCompressionScheme {
-                    scheme_id: compression_scheme_id,
-                    compression_version,
-                },
-            )?;
+            CompressionScheme::from_scheme_id(compression_scheme_id, compression_version)?;
 
         // For some reason, if the entry's compression scheme is None, uncompressed size is set to
         // 0 and compressed size is set to the size of the entry. Let's set both to the same value
@@ -492,11 +594,7 @@ impl Entry {
             .expect("name_hash <= Entry::V8_MAX_NAME_HASH, so it should fit into u32");
         let compression_scheme_id: u32 = self
             .compression_scheme
-            .as_scheme_id(compression_version)
-            .ok_or(FatSerializationError::UnsupportedCompressionScheme {
-                scheme: self.compression_scheme,
-                version: compression_version,
-            })?
+            .as_scheme_id(compression_version)?
             .into();
         // See comment in deserialize_v8()
         let uncompressed_size = match self.compression_scheme {
@@ -530,7 +628,10 @@ impl Entry {
         compression_version: CompressionVersion,
     ) -> Result<Self, FatDeserializationError> {
         match entry_version {
+            EntryVersion::V7 => todo!(),
             EntryVersion::V8 => Self::deserialize_v8(data, compression_version),
+            EntryVersion::V11 => todo!(),
+            EntryVersion::V13 => todo!(),
         }
     }
 
@@ -541,7 +642,10 @@ impl Entry {
         compression_version: CompressionVersion,
     ) -> Result<(), FatSerializationError> {
         match entry_version {
+            EntryVersion::V7 => todo!(),
             EntryVersion::V8 => self.serialize_v8(out, compression_version),
+            EntryVersion::V11 => todo!(),
+            EntryVersion::V13 => todo!(),
         }
     }
 
@@ -577,7 +681,7 @@ impl Fat {
         let fat_version = FatVersion::try_from(data.read_u32::<LE>()?)?;
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
 
-        let platform = Platform::try_from(data.read_u8()?)?;
+        let platform = Platform::from_platform_id(data.read_u8()?, fat_version)?;
         let compression_version = CompressionVersion::try_from(data.read_u8()?)?;
         let name_hash_version = NameHashVersion::try_from(data.read_u8()?)?;
         let padding_byte = data.read_u8()?;
@@ -626,13 +730,14 @@ impl Fat {
 
         let magic = match metadata.fat_version {
             FatVersion::Fat3 => FAT3_MAGIC,
+            FatVersion::Fat5 => FAT5_MAGIC,
         };
         out.write_u32::<LE>(magic)?;
 
         out.write_u32::<LE>(metadata.entry_version.into())?;
 
         // Flags
-        out.write_u8(metadata.platform.into())?;
+        out.write_u8(metadata.platform.as_platform_id(metadata.fat_version)?)?;
         out.write_u8(metadata.compression_version.into())?;
         out.write_u8(metadata.name_hash_version.into())?;
         out.write_u8(0x00)?;

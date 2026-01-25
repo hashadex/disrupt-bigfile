@@ -84,6 +84,9 @@ impl<R: Read + Seek> Dat<R> {
                 compression::decompress_xmemcompress(raw_data, &mut out)
                     .map_err(XMemCompressError::into)
             }
+            CompressionScheme::LZMA => todo!(),
+            CompressionScheme::LZ4LW => todo!(),
+            CompressionScheme::Oodle => todo!(),
         }
     }
 
