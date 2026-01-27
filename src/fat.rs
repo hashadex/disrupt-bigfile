@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
+use byteorder::BE;
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 use clap::ValueEnum;
 
@@ -506,32 +507,89 @@ pub struct Entry {
 impl Entry {
     // Entry V8 layout
 
-    // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
-    // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
-    // oooccccc cccccccc cccccccc cccccccc
     // oooooooo oooooooo oooooooo oooooooo
+    // oooccccc cccccccc cccccccc cccccccc
+    // uuuuuuuu uuuuuuuu uuuuuuuu uuuuusss
+    // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
 
-    // [h] hash = 32 bits
-    // [u] uncompressed size = 29 bits
-    // [s] compression scheme = 3 bits
     // [o] offset = 35 bits
     // [c] compressed size = 29 bits
+    // [u] uncompressed size = 29 bits
+    // [s] compression scheme = 3 bits
+    // [h] hash = 32 bits
 
-    fn deserialize_v8(
+    const V8_MAX_NAME_HASH: u64 = 2u64.pow(32);
+    const V8_MAX_OFFSET: u64 = 2u64.pow(35);
+    const V8_MAX_SIZE: u32 = 2u32.pow(29);
+
+    pub fn deserialize_v8(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u32, u32), io::Error> {
+        let a = entry_bytes.read_u64::<BE>()?;
+        let b = entry_bytes.read_u32::<BE>()?;
+        let c = entry_bytes.read_u32::<BE>()?;
+
+        let offset = a >> 29;
+        let compressed_size: u32 = (a & 0x1FFF_FFFF)
+            .try_into()
+            .expect("29 bit int should fit into u32");
+        let uncompressed_size = b >> 3;
+        let compression_scheme_id: u8 = (b & 0b111)
+            .try_into()
+            .expect("3 bit int should fit into u8");
+        let name_hash: u64 = c.into();
+
+        Ok((
+            name_hash,
+            offset,
+            compression_scheme_id,
+            uncompressed_size,
+            compressed_size,
+        ))
+    }
+
+    pub fn serialize_v8(
+        &self,
+        buf: &mut Vec<u8>,
+        uncompressed_size: u32,
+        compression_scheme_id: u8,
+    ) -> Result<(), io::Error> {
+        buf.reserve(16);
+
+        let a = (self.offset << 29) | u64::from(self.compressed_size);
+        let b = (uncompressed_size << 3) | u32::from(compression_scheme_id);
+        let c: u32 = self
+            .name_hash
+            .try_into()
+            .expect("serialize() should guarantee that name_hash fits into u32");
+
+        buf.write_u64::<BE>(a)?;
+        buf.write_u32::<BE>(b)?;
+        buf.write_u32::<BE>(c)?;
+
+        Ok(())
+    }
+
+    pub fn deserialize(
         mut data: impl Read,
+        entry_version: EntryVersion,
         compression_version: CompressionVersion,
     ) -> Result<Self, FatDeserializationError> {
-        let a = data.read_u32::<LE>()?;
-        let b = data.read_u32::<LE>()?;
-        let c = data.read_u32::<LE>()?;
-        let d = data.read_u32::<LE>()?;
+        let entry_length = match entry_version {
+            EntryVersion::V7 | EntryVersion::V8 => 16,
+            EntryVersion::V11 | EntryVersion::V13 => 20,
+        };
+        let mut buf = vec![0; entry_length];
 
-        let name_hash = u64::from(a);
-        let mut uncompressed_size = b >> 3;
-        let compression_scheme_id =
-            u8::try_from(b & 0b111).expect("u32 & 0b111 should always fit into u8");
-        let offset = (u64::from(d) << 3) | u64::from(c >> 29);
-        let compressed_size = c & 0x1FFF_FFFF;
+        data.read_exact(&mut buf)?;
+
+        buf.reverse();
+
+        let (name_hash, offset, compression_scheme_id, mut uncompressed_size, compressed_size) =
+            match entry_version {
+                EntryVersion::V7 => todo!(),
+                EntryVersion::V8 => Self::deserialize_v8(&buf),
+                EntryVersion::V11 => todo!(),
+                EntryVersion::V13 => todo!(),
+            }?;
 
         let compression_scheme =
             CompressionScheme::from_scheme_id(compression_scheme_id, compression_version)?;
@@ -552,101 +610,73 @@ impl Entry {
         })
     }
 
-    const V8_MAX_NAME_HASH: u64 = u32::MAX as u64;
-    const V8_MAX_OFFSET: u64 = 2u64.pow(35);
-    const V8_MAX_SIZE: u32 = 2u32.pow(29);
-
-    fn serialize_v8(
-        &self,
-        mut out: impl Write,
-        compression_version: CompressionVersion,
-    ) -> Result<(), FatSerializationError> {
-        if self.name_hash > Entry::V8_MAX_NAME_HASH {
-            return Err(FatSerializationError::NameHashWontFit {
-                name_hash: self.name_hash,
-                max: Entry::V8_MAX_NAME_HASH,
-            });
-        }
-
-        if self.offset > Entry::V8_MAX_OFFSET {
-            return Err(FatSerializationError::OffsetWontFit {
-                offset: self.offset,
-                max: Entry::V8_MAX_OFFSET,
-            });
-        }
-
-        if self.compressed_size > Entry::V8_MAX_SIZE {
-            return Err(FatSerializationError::SizeWontFit {
-                size: self.compressed_size,
-                max: Entry::V8_MAX_SIZE,
-            });
-        }
-        if self.uncompressed_size > Entry::V8_MAX_SIZE {
-            return Err(FatSerializationError::SizeWontFit {
-                size: self.uncompressed_size,
-                max: Entry::V8_MAX_SIZE,
-            });
-        }
-
-        let name_hash: u32 = self
-            .name_hash
-            .try_into()
-            .expect("name_hash <= Entry::V8_MAX_NAME_HASH, so it should fit into u32");
-        let compression_scheme_id: u32 = self
-            .compression_scheme
-            .as_scheme_id(compression_version)?
-            .into();
-        // See comment in deserialize_v8()
-        let uncompressed_size = match self.compression_scheme {
-            CompressionScheme::None => 0,
-            _ => self.uncompressed_size,
-        };
-
-        let offset_last_3_bits: u32 = (self.offset & 0b111)
-            .try_into()
-            .expect("u64 & 0b111 should always fit into u32");
-        let offset_first_32_bits: u32 = (self.offset >> 3)
-            .try_into()
-            .expect("35 bit int >> 3 should always fit into u32");
-
-        let a = name_hash;
-        let b = (uncompressed_size << 3) | compression_scheme_id;
-        let c = (offset_last_3_bits << 29) | self.compressed_size;
-        let d = offset_first_32_bits;
-
-        out.write_u32::<LE>(a)?;
-        out.write_u32::<LE>(b)?;
-        out.write_u32::<LE>(c)?;
-        out.write_u32::<LE>(d)?;
-
-        Ok(())
-    }
-
-    pub fn deserialize(
-        data: impl Read,
-        entry_version: EntryVersion,
-        compression_version: CompressionVersion,
-    ) -> Result<Self, FatDeserializationError> {
-        match entry_version {
-            EntryVersion::V7 => todo!(),
-            EntryVersion::V8 => Self::deserialize_v8(data, compression_version),
-            EntryVersion::V11 => todo!(),
-            EntryVersion::V13 => todo!(),
-        }
-    }
-
     pub fn serialize(
         &self,
-        out: impl Write,
+        mut out: impl Write,
         entry_version: EntryVersion,
         compression_version: CompressionVersion,
     ) -> Result<(), FatSerializationError> {
-        match entry_version {
+        let (max_name_hash, max_offset, max_size) = match entry_version {
             EntryVersion::V7 => todo!(),
-            EntryVersion::V8 => self.serialize_v8(out, compression_version),
+            EntryVersion::V8 => (
+                Self::V8_MAX_NAME_HASH,
+                Self::V8_MAX_OFFSET,
+                Self::V8_MAX_SIZE,
+            ),
             EntryVersion::V11 => todo!(),
             EntryVersion::V13 => todo!(),
+        };
+
+        if self.name_hash > max_name_hash {
+            return Err(FatSerializationError::NameHashWontFit {
+                name_hash: self.name_hash,
+                max: max_name_hash,
+            });
         }
+
+        if self.offset > max_offset {
+            return Err(FatSerializationError::OffsetWontFit {
+                offset: self.offset,
+                max: max_offset,
+            });
+        }
+
+        if self.uncompressed_size > max_size {
+            return Err(FatSerializationError::SizeWontFit {
+                size: self.uncompressed_size,
+                max: max_size,
+            });
+        }
+        if self.compressed_size > max_size {
+            return Err(FatSerializationError::SizeWontFit {
+                size: self.compressed_size,
+                max: max_size,
+            });
+        }
+
+        // See comment in deserialize()
+        let uncompressed_size = if self.compression_scheme == CompressionScheme::None {
+            0
+        } else {
+            self.uncompressed_size
+        };
+        let compression_scheme_id = self.compression_scheme.as_scheme_id(compression_version)?;
+
+        let mut buf = Vec::new();
+        match entry_version {
+            EntryVersion::V7 => todo!(),
+            EntryVersion::V8 => {
+                self.serialize_v8(&mut buf, uncompressed_size, compression_scheme_id)
+            }
+            EntryVersion::V11 => todo!(),
+            EntryVersion::V13 => todo!(),
+        }?;
+
+        buf.reverse();
+
+        out.write_all(&buf)?;
+
+        Ok(())
     }
 
     pub fn path(&self) -> PathBuf {
