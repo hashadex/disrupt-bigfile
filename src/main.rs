@@ -269,7 +269,7 @@ fn pack(
 
     let spinner = ProgressBar::no_length().with_style(
         ProgressStyle::with_template("{spinner} Packed files: {pos}")
-            .expect("Hardcoded template should always be valid"),
+            .expect("hardcoded template should always be valid"),
     );
     for entry in WalkDir::new(&in_dir) {
         let entry = entry?;
