@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::env;
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Write};
-use std::path::Path;
+use std::io::{BufRead, BufReader, Write};
+use std::path::PathBuf;
 
 fn fnv1_hash(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xCBF2_9CE4_8422_2325; // Set hash to default seed
@@ -16,47 +16,214 @@ fn fnv1_hash(bytes: &[u8]) -> u64 {
     hash
 }
 
-fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
-    let filelist_paths = filelist_path_strs
-        .iter()
-        .map(|s| Path::new("filelists").join(s));
+const FILELIST_PATHS: [&str; 157] = [
+    "wd1/common.filelist",
+    "wd1/dlc/dlc_exclusive/dlc_exclusive.filelist",
+    "wd1/dlc/dlc_exclusive/dlc_exclusive_brazilian.filelist",
+    "wd1/dlc/dlc_exclusive/dlc_exclusive_english.filelist",
+    "wd1/dlc/dlc_exclusive/dlc_exclusive_french.filelist",
+    "wd1/dlc/dlc_exclusive/dlc_exclusive_german.filelist",
+    "wd1/dlc/dlc_exclusive/dlc_exclusive_italian.filelist",
+    "wd1/dlc/dlc_exclusive/dlc_exclusive_japanese.filelist",
+    "wd1/dlc/dlc_exclusive/dlc_exclusive_russian.filelist",
+    "wd1/dlc/dlc_exclusive/dlc_exclusive_spanish.filelist",
+    "wd1/dlc/dlc_pill_people/dlc_pill_people.filelist",
+    "wd1/dlc/dlc_solo/dlc_solo.filelist",
+    "wd1/dlc/dlc_solo/dlc_solo_brazilian.filelist",
+    "wd1/dlc/dlc_solo/dlc_solo_english.filelist",
+    "wd1/dlc/dlc_solo/dlc_solo_french.filelist",
+    "wd1/dlc/dlc_solo/dlc_solo_german.filelist",
+    "wd1/dlc/dlc_solo/dlc_solo_italian.filelist",
+    "wd1/dlc/dlc_solo/dlc_solo_japanese.filelist",
+    "wd1/dlc/dlc_solo/dlc_solo_russian.filelist",
+    "wd1/dlc/dlc_solo/dlc_solo_spanish.filelist",
+    "wd1/patch.filelist",
+    "wd1/patch1.filelist",
+    "wd1/shaders.filelist",
+    "wd1/shadersobj.filelist",
+    "wd1/sound.filelist",
+    "wd1/sound_brazilian.filelist",
+    "wd1/sound_english.filelist",
+    "wd1/sound_french.filelist",
+    "wd1/sound_german.filelist",
+    "wd1/sound_italian.filelist",
+    "wd1/sound_japanese.filelist",
+    "wd1/sound_russian.filelist",
+    "wd1/sound_spanish.filelist",
+    "wd1/videos.filelist",
+    "wd1/worlds/windy_city/windy_city.filelist",
+    "wd1/worlds/windy_city/windy_city_brazilian.filelist",
+    "wd1/worlds/windy_city/windy_city_cache.filelist",
+    "wd1/worlds/windy_city/windy_city_english.filelist",
+    "wd1/worlds/windy_city/windy_city_french.filelist",
+    "wd1/worlds/windy_city/windy_city_german.filelist",
+    "wd1/worlds/windy_city/windy_city_italian.filelist",
+    "wd1/worlds/windy_city/windy_city_japanese.filelist",
+    "wd1/worlds/windy_city/windy_city_russian.filelist",
+    "wd1/worlds/windy_city/windy_city_spanish.filelist",
+    "wd2/common.filelist",
+    "wd2/dlc/dlc_ultra_textures/dlc_ultra_textures.filelist",
+    "wd2/installpackage.filelist",
+    "wd2/installpackage_brazilian.filelist",
+    "wd2/installpackage_english.filelist",
+    "wd2/installpackage_french.filelist",
+    "wd2/installpackage_german.filelist",
+    "wd2/installpackage_italian.filelist",
+    "wd2/installpackage_japanese.filelist",
+    "wd2/installpackage_mexican.filelist",
+    "wd2/installpackage_russian.filelist",
+    "wd2/installpackage_spanish.filelist",
+    "wd2/patch.filelist",
+    "wd2/patch2.filelist",
+    "wd2/patch2_brazilian.filelist",
+    "wd2/patch2_english.filelist",
+    "wd2/patch2_french.filelist",
+    "wd2/patch2_german.filelist",
+    "wd2/patch2_italian.filelist",
+    "wd2/patch2_japanese.filelist",
+    "wd2/patch2_mexican.filelist",
+    "wd2/patch2_russian.filelist",
+    "wd2/patch2_spanish.filelist",
+    "wd2/patch_brazilian.filelist",
+    "wd2/patch_english.filelist",
+    "wd2/patch_french.filelist",
+    "wd2/patch_german.filelist",
+    "wd2/patch_italian.filelist",
+    "wd2/patch_japanese.filelist",
+    "wd2/patch_mexican.filelist",
+    "wd2/patch_russian.filelist",
+    "wd2/patch_spanish.filelist",
+    "wd2/shadersobj.filelist",
+    "wd2/sound.filelist",
+    "wd2/sound_brazilian.filelist",
+    "wd2/sound_english.filelist",
+    "wd2/sound_french.filelist",
+    "wd2/sound_german.filelist",
+    "wd2/sound_italian.filelist",
+    "wd2/sound_japanese.filelist",
+    "wd2/sound_mexican.filelist",
+    "wd2/sound_russian.filelist",
+    "wd2/sound_spanish.filelist",
+    "wd2/videos.filelist",
+    "wd2/worlds/san_francisco/san_francisco.filelist",
+    "wd2/worlds/san_francisco/san_francisco_brazilian.filelist",
+    "wd2/worlds/san_francisco/san_francisco_cache.filelist",
+    "wd2/worlds/san_francisco/san_francisco_cache_patch.filelist",
+    "wd2/worlds/san_francisco/san_francisco_english.filelist",
+    "wd2/worlds/san_francisco/san_francisco_french.filelist",
+    "wd2/worlds/san_francisco/san_francisco_german.filelist",
+    "wd2/worlds/san_francisco/san_francisco_hires.filelist",
+    "wd2/worlds/san_francisco/san_francisco_italian.filelist",
+    "wd2/worlds/san_francisco/san_francisco_japanese.filelist",
+    "wd2/worlds/san_francisco/san_francisco_mexican.filelist",
+    "wd2/worlds/san_francisco/san_francisco_preload.filelist",
+    "wd2/worlds/san_francisco/san_francisco_russian.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound_brazilian.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound_english.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound_french.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound_german.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound_italian.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound_japanese.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound_mexican.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound_russian.filelist",
+    "wd2/worlds/san_francisco/san_francisco_sound_spanish.filelist",
+    "wd2/worlds/san_francisco/san_francisco_spanish.filelist",
+    "wdl/common.filelist",
+    "wdl/commonengine.filelist",
+    "wdl/patch.filelist",
+    "wdl/patch_brazilian.filelist",
+    "wdl/patch_english.filelist",
+    "wdl/patch_french.filelist",
+    "wdl/patch_german.filelist",
+    "wdl/patch_italian.filelist",
+    "wdl/patch_japanese.filelist",
+    "wdl/patch_russian.filelist",
+    "wdl/patch_spanish.filelist",
+    "wdl/shadersobj.filelist",
+    "wdl/sound.filelist",
+    "wdl/sound_brazilian.filelist",
+    "wdl/sound_english.filelist",
+    "wdl/sound_french.filelist",
+    "wdl/sound_german.filelist",
+    "wdl/sound_italian.filelist",
+    "wdl/sound_japanese.filelist",
+    "wdl/sound_russian.filelist",
+    "wdl/sound_spanish.filelist",
+    "wdl/videos.filelist",
+    "wdl/videos_ultra.filelist",
+    "wdl/worlds/london/london.filelist",
+    "wdl/worlds/london/london_brazilian.filelist",
+    "wdl/worlds/london/london_cache.filelist",
+    "wdl/worlds/london/london_english.filelist",
+    "wdl/worlds/london/london_french.filelist",
+    "wdl/worlds/london/london_german.filelist",
+    "wdl/worlds/london/london_hires.filelist",
+    "wdl/worlds/london/london_italian.filelist",
+    "wdl/worlds/london/london_japanese.filelist",
+    "wdl/worlds/london/london_preload.filelist",
+    "wdl/worlds/london/london_russian.filelist",
+    "wdl/worlds/london/london_sound.filelist",
+    "wdl/worlds/london/london_sound_brazilian.filelist",
+    "wdl/worlds/london/london_sound_english.filelist",
+    "wdl/worlds/london/london_sound_french.filelist",
+    "wdl/worlds/london/london_sound_german.filelist",
+    "wdl/worlds/london/london_sound_italian.filelist",
+    "wdl/worlds/london/london_sound_japanese.filelist",
+    "wdl/worlds/london/london_sound_russian.filelist",
+    "wdl/worlds/london/london_sound_spanish.filelist",
+    "wdl/worlds/london/london_spanish.filelist",
+    "wdl/worlds/london/london_ultra.filelist",
+];
+
+fn main() -> Result<(), String> {
+    println!("cargo::rerun-if-changed=filelists");
 
     let mut hash_source_map = HashMap::new();
     let mut colliding_hashes = Vec::new();
 
-    for filelist_path in filelist_paths {
-        let file = BufReader::new(File::open(&filelist_path).map_err(|err| {
-            format!(
-                "can't open filelist {}: {err}; make sure you have cloned the repo with submodules",
-                filelist_path.display()
-            )
-        })?);
+    for filelist_path in FILELIST_PATHS {
+        let hash_32_bit = filelist_path.starts_with("wd1");
+
+        let filelist_path: PathBuf = ["filelists", filelist_path].iter().collect();
+        let file = BufReader::new(File::open(&filelist_path).map_err(|err| format!("error while opening filelist {}: {err}; make sure you have cloned the repo with submodules", filelist_path.display()))?);
 
         let mut new_entries_count = 0;
 
-        for line in file.lines().map_while(Result::ok) {
+        for line in file.lines() {
+            let line = line.map_err(|err| {
+                format!(
+                    "failed to read all lines from {}: {err}",
+                    filelist_path.display()
+                )
+            })?;
+
             if line.starts_with(';') {
                 continue;
             }
 
-            let hash32 = fnv1_hash(line.to_lowercase().as_bytes()) & 0xFFFF_FFFF;
+            let mut hash = fnv1_hash(line.as_bytes());
+            if hash_32_bit {
+                hash &= 0xFFFF_FFFF;
+            }
 
-            if colliding_hashes.contains(&hash32) {
+            if colliding_hashes.contains(&hash) {
                 continue;
             }
 
-            match hash_source_map.entry(hash32) {
-                Entry::Vacant(e) => {
-                    e.insert(line);
-                    new_entries_count += 1;
-                }
-                Entry::Occupied(e) => {
-                    let other_source = e.get();
+            match hash_source_map.entry(hash) {
+                Entry::Occupied(entry) => {
+                    let other_source = entry.get();
                     if line != *other_source {
                         println!("collision: {line} vs {other_source}");
-                        e.remove();
-                        colliding_hashes.push(hash32);
+
+                        entry.remove();
+                        colliding_hashes.push(hash);
                     }
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(line);
+                    new_entries_count += 1;
                 }
             }
         }
@@ -68,78 +235,35 @@ fn build_filelists(filelist_path_strs: &[&str]) -> Result<(), String> {
     }
 
     println!(
-        "read {} entries total; {} collisions. building phf map...",
-        hash_source_map.keys().len(),
+        "read {} entries total; {} collisions. processing sources...",
+        hash_source_map.len(),
         colliding_hashes.len()
     );
 
     let mut phf_hash_source_map = phf_codegen::Map::new();
+
     for (hash, source) in hash_source_map {
-        let unix_separator_source = source.replace('\\', "/");
-        phf_hash_source_map.entry(hash, format!("\"{unix_separator_source}\""));
+        let mut phf_source = String::with_capacity(source.len() + 2);
+        phf_source.push('"');
+        phf_source.push_str(&source.replace('\\', "/"));
+        phf_source.push('"');
+
+        phf_hash_source_map.entry(hash, phf_source);
     }
 
-    let outfile_path = Path::new(&env::var("OUT_DIR").expect("OUT_DIR should be set by cargo"))
-        .join("hash_source_map.rs");
-    let mut outfile = BufWriter::new(
-        File::create(outfile_path).map_err(|err| format!("failed to create outfile: {err}"))?,
-    );
+    println!("done. building phf map...");
 
-    write!(outfile, "{}", phf_hash_source_map.build())
+    let outfile_path: PathBuf = [
+        &env::var("OUT_DIR").expect("OUT_DIR should be set by cargo"),
+        "hash_source_map.rs",
+    ]
+    .iter()
+    .collect();
+    let mut outfile =
+        File::create(&outfile_path).map_err(|err| format!("failed to create outfile: {err}"))?;
+
+    write!(&mut outfile, "{}", phf_hash_source_map.build())
         .map_err(|err| format!("failed to write to outfile: {err}"))?;
-
-    Ok(())
-}
-
-fn main() -> Result<(), String> {
-    println!("cargo::rerun-if-changed=filelists");
-
-    build_filelists(&[
-        "wd1/common.filelist",
-        "wd1/dlc/dlc_exclusive/dlc_exclusive.filelist",
-        "wd1/dlc/dlc_exclusive/dlc_exclusive_brazilian.filelist",
-        "wd1/dlc/dlc_exclusive/dlc_exclusive_english.filelist",
-        "wd1/dlc/dlc_exclusive/dlc_exclusive_french.filelist",
-        "wd1/dlc/dlc_exclusive/dlc_exclusive_german.filelist",
-        "wd1/dlc/dlc_exclusive/dlc_exclusive_italian.filelist",
-        "wd1/dlc/dlc_exclusive/dlc_exclusive_japanese.filelist",
-        "wd1/dlc/dlc_exclusive/dlc_exclusive_russian.filelist",
-        "wd1/dlc/dlc_exclusive/dlc_exclusive_spanish.filelist",
-        "wd1/dlc/dlc_pill_people/dlc_pill_people.filelist",
-        "wd1/dlc/dlc_solo/dlc_solo.filelist",
-        "wd1/dlc/dlc_solo/dlc_solo_brazilian.filelist",
-        "wd1/dlc/dlc_solo/dlc_solo_english.filelist",
-        "wd1/dlc/dlc_solo/dlc_solo_french.filelist",
-        "wd1/dlc/dlc_solo/dlc_solo_german.filelist",
-        "wd1/dlc/dlc_solo/dlc_solo_italian.filelist",
-        "wd1/dlc/dlc_solo/dlc_solo_japanese.filelist",
-        "wd1/dlc/dlc_solo/dlc_solo_russian.filelist",
-        "wd1/dlc/dlc_solo/dlc_solo_spanish.filelist",
-        "wd1/patch.filelist",
-        "wd1/shaders.filelist",
-        "wd1/shadersobj.filelist",
-        "wd1/sound.filelist",
-        "wd1/sound_brazilian.filelist",
-        "wd1/sound_english.filelist",
-        "wd1/sound_french.filelist",
-        "wd1/sound_german.filelist",
-        "wd1/sound_italian.filelist",
-        "wd1/sound_japanese.filelist",
-        "wd1/sound_russian.filelist",
-        "wd1/sound_spanish.filelist",
-        "wd1/videos.filelist",
-        "wd1/worlds/windy_city/windy_city.filelist",
-        "wd1/worlds/windy_city/windy_city_brazilian.filelist",
-        "wd1/worlds/windy_city/windy_city_cache.filelist",
-        "wd1/worlds/windy_city/windy_city_english.filelist",
-        "wd1/worlds/windy_city/windy_city_french.filelist",
-        "wd1/worlds/windy_city/windy_city_german.filelist",
-        "wd1/worlds/windy_city/windy_city_italian.filelist",
-        "wd1/worlds/windy_city/windy_city_japanese.filelist",
-        "wd1/worlds/windy_city/windy_city_russian.filelist",
-        "wd1/worlds/windy_city/windy_city_spanish.filelist",
-        "wd1/patch1.filelist",
-    ])?;
 
     Ok(())
 }
