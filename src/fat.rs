@@ -505,6 +505,69 @@ pub struct Entry {
 }
 
 impl Entry {
+    // Entry V7 layout
+
+    // oooooooo oooooooo oooooooo oooooooo
+    // oocccccc cccccccc cccccccc cccccccc
+    // uuuuuuuu uuuuuuuu uuuuuuuu uuuuuuss
+    // hhhhhhhh hhhhhhhh hhhhhhhh hhhhhhhh
+
+    // [o] offset = 34 bits
+    // [c] compressed size = 30 bits
+    // [u] uncompressed size = 30 bits
+    // [s] compression scheme = 2 bits
+    // [h] hash = 32 bits
+
+    const V7_MAX_NAME_HASH: u64 = 2u64.pow(32);
+    const V7_MAX_OFFSET: u64 = 2u64.pow(34);
+    const V7_MAX_SIZE: u32 = 2u32.pow(30);
+
+    fn deserialize_v7(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u32, u32), io::Error> {
+        let a = entry_bytes.read_u64::<BE>()?;
+        let b = entry_bytes.read_u32::<BE>()?;
+        let c = entry_bytes.read_u32::<BE>()?;
+
+        let offset = a >> 30;
+        let compressed_size: u32 = (a & 0x3FFF_FFFF)
+            .try_into()
+            .expect("30 bit int should fit into u32");
+        let uncompressed_size = b >> 2;
+        let compression_scheme_id: u8 = (b & 0b11)
+            .try_into()
+            .expect("2 bit int should fit into u8");
+        let name_hash: u64 = c.into();
+
+        Ok((
+            name_hash,
+            offset,
+            compression_scheme_id,
+            uncompressed_size,
+            compressed_size,
+        ))
+    }
+
+    fn serialize_v7(
+        &self,
+        buf: &mut Vec<u8>,
+        uncompressed_size: u32,
+        compression_scheme_id: u8,
+    ) -> Result<(), io::Error> {
+        buf.reserve(16);
+
+        let a = (self.offset << 30) | u64::from(self.compressed_size);
+        let b = (uncompressed_size << 2) | u32::from(compression_scheme_id);
+        let c: u32 = self
+            .name_hash
+            .try_into()
+            .expect("serialize() should guarantee that name_hash fits into u32");
+
+        buf.write_u64::<BE>(a)?;
+        buf.write_u32::<BE>(b)?;
+        buf.write_u32::<BE>(c)?;
+
+        Ok(())
+    }
+
     // Entry V8 layout
 
     // oooooooo oooooooo oooooooo oooooooo
@@ -583,13 +646,14 @@ impl Entry {
 
         buf.reverse();
 
+        let deserializer = match entry_version {
+            EntryVersion::V7 => Self::deserialize_v7,
+            EntryVersion::V8 => Self::deserialize_v8,
+            EntryVersion::V11 => todo!(),
+            EntryVersion::V13 => todo!(),
+        };
         let (name_hash, offset, compression_scheme_id, mut uncompressed_size, compressed_size) =
-            match entry_version {
-                EntryVersion::V7 => todo!(),
-                EntryVersion::V8 => Self::deserialize_v8(&buf),
-                EntryVersion::V11 => todo!(),
-                EntryVersion::V13 => todo!(),
-            }?;
+            deserializer(&buf)?;
 
         let compression_scheme =
             CompressionScheme::from_scheme_id(compression_scheme_id, compression_version)?;
@@ -617,7 +681,11 @@ impl Entry {
         compression_version: CompressionVersion,
     ) -> Result<(), FatSerializationError> {
         let (max_name_hash, max_offset, max_size) = match entry_version {
-            EntryVersion::V7 => todo!(),
+            EntryVersion::V7 => (
+                Self::V7_MAX_NAME_HASH,
+                Self::V7_MAX_OFFSET,
+                Self::V7_MAX_SIZE,
+            ),
             EntryVersion::V8 => (
                 Self::V8_MAX_NAME_HASH,
                 Self::V8_MAX_OFFSET,
@@ -663,14 +731,14 @@ impl Entry {
         let compression_scheme_id = self.compression_scheme.as_scheme_id(compression_version)?;
 
         let mut buf = Vec::new();
-        match entry_version {
-            EntryVersion::V7 => todo!(),
-            EntryVersion::V8 => {
-                self.serialize_v8(&mut buf, uncompressed_size, compression_scheme_id)
-            }
+        
+        let serializer = match entry_version {
+            EntryVersion::V7 => Self::serialize_v7,
+            EntryVersion::V8 => Self::serialize_v8,
             EntryVersion::V11 => todo!(),
             EntryVersion::V13 => todo!(),
-        }?;
+        };
+        serializer(self, &mut buf, uncompressed_size, compression_scheme_id)?;
 
         buf.reverse();
 
