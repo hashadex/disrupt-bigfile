@@ -528,14 +528,12 @@ impl Entry {
         let c = entry_bytes.read_u32::<BE>()?;
 
         let offset = a >> 30;
-        let compressed_size: u32 = (a & 0x3FFF_FFFF)
+        let compressed_size = (a & 0x3FFF_FFFF)
             .try_into()
             .expect("30 bit int should fit into u32");
         let uncompressed_size = b >> 2;
-        let compression_scheme_id: u8 = (b & 0b11)
-            .try_into()
-            .expect("2 bit int should fit into u8");
-        let name_hash: u64 = c.into();
+        let compression_scheme_id = (b & 0b11).try_into().expect("2 bit int should fit into u8");
+        let name_hash = c.into();
 
         Ok((
             name_hash,
@@ -556,7 +554,7 @@ impl Entry {
 
         let a = (self.offset << 30) | u64::from(self.compressed_size);
         let b = (uncompressed_size << 2) | u32::from(compression_scheme_id);
-        let c: u32 = self
+        let c = self
             .name_hash
             .try_into()
             .expect("serialize() should guarantee that name_hash fits into u32");
@@ -591,11 +589,11 @@ impl Entry {
         let c = entry_bytes.read_u32::<BE>()?;
 
         let offset = a >> 29;
-        let compressed_size: u32 = (a & 0x1FFF_FFFF)
+        let compressed_size = (a & 0x1FFF_FFFF)
             .try_into()
             .expect("29 bit int should fit into u32");
         let uncompressed_size = b >> 3;
-        let compression_scheme_id: u8 = (b & 0b111)
+        let compression_scheme_id = (b & 0b111)
             .try_into()
             .expect("3 bit int should fit into u8");
         let name_hash: u64 = c.into();
