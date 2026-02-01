@@ -522,7 +522,7 @@ impl Entry {
     const V8_MAX_OFFSET: u64 = 2u64.pow(35);
     const V8_MAX_SIZE: u32 = 2u32.pow(29);
 
-    pub fn deserialize_v8(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u32, u32), io::Error> {
+    fn deserialize_v8(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u32, u32), io::Error> {
         let a = entry_bytes.read_u64::<BE>()?;
         let b = entry_bytes.read_u32::<BE>()?;
         let c = entry_bytes.read_u32::<BE>()?;
@@ -546,7 +546,7 @@ impl Entry {
         ))
     }
 
-    pub fn serialize_v8(
+    fn serialize_v8(
         &self,
         buf: &mut Vec<u8>,
         uncompressed_size: u32,
