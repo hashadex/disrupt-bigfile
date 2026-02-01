@@ -518,7 +518,7 @@ impl Entry {
     // [s] compression scheme = 2 bits
     // [h] hash = 32 bits
 
-    const V7_MAX_NAME_HASH: u64 = 2u64.pow(32);
+    const V7_MAX_NAME_HASH: u64 = u32::MAX as u64;
     const V7_MAX_OFFSET: u64 = 2u64.pow(34);
     const V7_MAX_SIZE: u32 = 2u32.pow(30);
 
@@ -581,7 +581,7 @@ impl Entry {
     // [s] compression scheme = 3 bits
     // [h] hash = 32 bits
 
-    const V8_MAX_NAME_HASH: u64 = 2u64.pow(32);
+    const V8_MAX_NAME_HASH: u64 = u32::MAX as u64;
     const V8_MAX_OFFSET: u64 = 2u64.pow(35);
     const V8_MAX_SIZE: u32 = 2u32.pow(29);
 
