@@ -285,54 +285,6 @@ impl fmt::Display for Platform {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
-pub enum NameHashVersion {
-    V50,
-    V55,
-    V56,
-    V58,
-    V70,
-}
-
-impl TryFrom<u8> for NameHashVersion {
-    type Error = FatDeserializationError;
-
-    fn try_from(version: u8) -> Result<Self, Self::Error> {
-        match version {
-            50 => Ok(Self::V50),
-            55 => Ok(Self::V55),
-            56 => Ok(Self::V56),
-            58 => Ok(Self::V58),
-            70 => Ok(Self::V70),
-            _ => Err(Self::Error::UnknownNameHashVersion(version)),
-        }
-    }
-}
-
-impl From<NameHashVersion> for u8 {
-    fn from(version: NameHashVersion) -> Self {
-        match version {
-            NameHashVersion::V50 => 50,
-            NameHashVersion::V55 => 55,
-            NameHashVersion::V56 => 56,
-            NameHashVersion::V58 => 58,
-            NameHashVersion::V70 => 70,
-        }
-    }
-}
-
-impl fmt::Display for NameHashVersion {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::V50 => write!(f, "V50"),
-            Self::V55 => write!(f, "V55"),
-            Self::V56 => write!(f, "V56"),
-            Self::V58 => write!(f, "V58"),
-            Self::V70 => write!(f, "V70"),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum CompressionVersion {
     V0,
     V4,
@@ -380,6 +332,54 @@ impl fmt::Display for CompressionVersion {
             Self::V6 => write!(f, "V6"),
             Self::V8 => write!(f, "V8"),
             Self::V9 => write!(f, "V9"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
+pub enum NameHashVersion {
+    V50,
+    V55,
+    V56,
+    V58,
+    V70,
+}
+
+impl TryFrom<u8> for NameHashVersion {
+    type Error = FatDeserializationError;
+
+    fn try_from(version: u8) -> Result<Self, Self::Error> {
+        match version {
+            50 => Ok(Self::V50),
+            55 => Ok(Self::V55),
+            56 => Ok(Self::V56),
+            58 => Ok(Self::V58),
+            70 => Ok(Self::V70),
+            _ => Err(Self::Error::UnknownNameHashVersion(version)),
+        }
+    }
+}
+
+impl From<NameHashVersion> for u8 {
+    fn from(version: NameHashVersion) -> Self {
+        match version {
+            NameHashVersion::V50 => 50,
+            NameHashVersion::V55 => 55,
+            NameHashVersion::V56 => 56,
+            NameHashVersion::V58 => 58,
+            NameHashVersion::V70 => 70,
+        }
+    }
+}
+
+impl fmt::Display for NameHashVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::V50 => write!(f, "V50"),
+            Self::V55 => write!(f, "V55"),
+            Self::V56 => write!(f, "V56"),
+            Self::V58 => write!(f, "V58"),
+            Self::V70 => write!(f, "V70"),
         }
     }
 }
