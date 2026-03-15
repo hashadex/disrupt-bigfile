@@ -12,7 +12,8 @@ use walkdir::WalkDir;
 use disrupt_bigfile::builder::ArchiveBuilder;
 use disrupt_bigfile::dat::Dat;
 use disrupt_bigfile::fat::{
-    CompressionVersion, EntryVersion, Fat, FatMetadata, FatVersion, NameHashVersion, Platform,
+    CompressionVersion, Dependency, EntryVersion, Fat, FatMetadata, FatVersion, NameHashVersion,
+    Platform,
 };
 
 fn existing_file_parser(source: &str) -> Result<PathBuf, String> {
@@ -35,6 +36,26 @@ fn existing_dir_parser(source: &str) -> Result<PathBuf, String> {
     } else {
         Err("is not a directory".to_string())
     }
+}
+
+fn hex_u64_parser(source: &str) -> Result<u64, String> {
+    u64::from_str_radix(source, 16)
+        .map_err(|err| format!("failed to parse hex 64-bit integer: {err}"))
+}
+
+fn dependency_parser(source: &str) -> Result<Dependency, String> {
+    let parts: Vec<&str> = source.split(',').collect();
+    if parts.len() != 2 {
+        return Err("expected two comma-separated hexadecimal integers".to_string());
+    }
+
+    let archive_hash = hex_u64_parser(parts[0])?;
+    let name_hash = hex_u64_parser(parts[1])?;
+
+    Ok(Dependency {
+        archive_hash,
+        name_hash,
+    })
 }
 
 #[derive(Clone, Debug, ValueEnum)]
@@ -119,10 +140,40 @@ enum Action {
         /// Changes which compression schemes are available and their IDs.
         #[arg(short, long)]
         compression_version: Option<CompressionVersion>,
-        
+
         /// Does not seem to affect anything.
         #[arg(short, long)]
         name_hash_version: Option<NameHashVersion>,
+
+        /// Does not seem to affect anything.
+        ///
+        /// Present only in FAT5 archives. It will be ignored if you try to add an archive hash to
+        /// a FAT3 archive.
+        ///
+        /// In Watch Dogs 2, it is always set to 0xFFFF_FFFF_FFFF_FFFF in all archives.
+        ///
+        /// In Legion, it is set to the same value in all archives except london.fat, where it is
+        /// set to 0xA7E2_977F_3F32_B98E; and london_cache.fat, where it is set to
+        /// 0xB782_28C0_B350_CC14.
+        #[arg(short, long, value_parser = hex_u64_parser)]
+        archive_hash: Option<u64>,
+
+        /// Add a dependency to the archive, as two comma-separated hexadecimal 64-bit integers.
+        /// (for example, "--dependency B78228C0B350CC14,BE38E2B5954E5FA4")
+        ///
+        /// The first value is the dependency's archive hash and the second value is the
+        /// dependency's name hash.
+        ///
+        /// This option may be used more than once.
+        ///
+        /// Dependencies are only present in FAT5 archives. They will be ignored if you try to add
+        /// dependencies to a FAT3 archive.
+        ///
+        /// In Watch Dogs 2, dependencies are not present in any of the archives.
+        ///
+        /// In Legion, dependencies are present only in london.fat and london_cache.fat.
+        #[arg(short, long = "dependency", value_parser = dependency_parser)]
+        dependencies: Option<Vec<Dependency>>,
 
         /// Preset for FAT metadata
         ///
@@ -166,6 +217,18 @@ fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
         println!("Compression version: {}", metadata.compression_version);
         println!("Name hash version:   {}", metadata.name_hash_version);
         println!("Entry count:         {}", fat.entries.len());
+
+        if let Some(archive_hash) = metadata.archive_hash {
+            println!("Archive hash:        0x{archive_hash:X}");
+        }
+
+        if !metadata.dependencies.is_empty() {
+            println!("Dependencies:");
+
+            for dependency in metadata.dependencies {
+                println!("\t-> {dependency}");
+            }
+        }
     }
 
     Ok(())
@@ -228,6 +291,8 @@ fn pack(
     platform: Option<Platform>,
     compression_version: Option<CompressionVersion>,
     name_hash_version: Option<NameHashVersion>,
+    archive_hash: Option<u64>,
+    dependencies: Option<Vec<Dependency>>,
 ) -> Result<(), Box<dyn Error>> {
     let preset: FatMetadata = preset.into();
 
@@ -236,6 +301,8 @@ fn pack(
     let compression_version = compression_version.unwrap_or(preset.compression_version);
     let platform = platform.unwrap_or(preset.platform);
     let name_hash_version = name_hash_version.unwrap_or(preset.name_hash_version);
+    let archive_hash = archive_hash.or(preset.archive_hash);
+    let dependencies = dependencies.unwrap_or(preset.dependencies);
 
     let metadata = FatMetadata {
         fat_version,
@@ -243,6 +310,8 @@ fn pack(
         compression_version,
         platform,
         name_hash_version,
+        archive_hash,
+        dependencies,
     };
 
     eprintln!("FAT info: {metadata}\n");
@@ -305,6 +374,8 @@ fn main() -> ExitCode {
             platform,
             compression_version,
             name_hash_version,
+            archive_hash,
+            dependencies,
             preset,
         } => pack(
             dir,
@@ -316,6 +387,8 @@ fn main() -> ExitCode {
             platform,
             compression_version,
             name_hash_version,
+            archive_hash,
+            dependencies,
         ),
     };
 

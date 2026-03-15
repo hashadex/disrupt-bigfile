@@ -90,6 +90,8 @@ pub enum FatSerializationError {
         scheme: CompressionScheme,
         compression_version: CompressionVersion,
     },
+    MissingArchiveHash,
+    DependencyCountWontFit(usize),
     EntryCountWontFit(usize),
     NameHashWontFit {
         name_hash: u64,
@@ -125,6 +127,12 @@ impl fmt::Display for FatSerializationError {
             } => write!(
                 f,
                 "compression scheme {scheme} is not supported by compression version {compression_version}"
+            ),
+            Self::MissingArchiveHash => write!(f, "archive hash cannot be None in FAT5"),
+            Self::DependencyCountWontFit(count) => write!(
+                f,
+                "dependency count is too large to fit into header, expected {} entries max, got {count}",
+                u32::MAX
             ),
             Self::EntryCountWontFit(count) => write!(
                 f,
@@ -385,12 +393,49 @@ impl fmt::Display for NameHashVersion {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Dependency {
+    pub archive_hash: u64,
+    pub name_hash: u64,
+}
+
+impl Dependency {
+    pub fn deserialize(mut data: impl Read) -> Result<Dependency, io::Error> {
+        let archive_hash = data.read_u64::<LE>()?;
+        let name_hash = data.read_u64::<LE>()?;
+
+        Ok(Dependency {
+            archive_hash,
+            name_hash,
+        })
+    }
+
+    pub fn serialize(&self, mut out: impl Write) -> Result<(), io::Error> {
+        out.write_u64::<LE>(self.archive_hash)?;
+        out.write_u64::<LE>(self.name_hash)?;
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for Dependency {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Archive hash 0x{:X}, Name hash 0x{:X}",
+            self.archive_hash, self.name_hash
+        )
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct FatMetadata {
     pub fat_version: FatVersion,
     pub entry_version: EntryVersion,
     pub platform: Platform,
     pub compression_version: CompressionVersion,
     pub name_hash_version: NameHashVersion,
+    pub archive_hash: Option<u64>,
+    pub dependencies: Vec<Dependency>,
 }
 
 impl FatMetadata {
@@ -400,6 +445,8 @@ impl FatMetadata {
         platform: Platform::Win64,
         compression_version: CompressionVersion::V5,
         name_hash_version: NameHashVersion::V50,
+        archive_hash: None,
+        dependencies: Vec::new(),
     };
 
     pub const WD1_SOUND: FatMetadata = FatMetadata {
@@ -408,6 +455,8 @@ impl FatMetadata {
         platform: Platform::Any,
         compression_version: CompressionVersion::V0,
         name_hash_version: NameHashVersion::V50,
+        archive_hash: None,
+        dependencies: Vec::new(),
     };
 }
 
@@ -420,8 +469,28 @@ impl fmt::Display for FatMetadata {
             self.entry_version,
             self.platform,
             self.compression_version,
-            self.name_hash_version
-        )
+            self.name_hash_version,
+        )?;
+
+        if let Some(archive_hash) = self.archive_hash {
+            write!(f, ", Archive hash 0x{archive_hash:X}")?;
+        }
+
+        if !self.dependencies.is_empty() {
+            write!(f, ", Dependencies [")?;
+
+            for (index, dependency) in self.dependencies.iter().enumerate() {
+                if index != 0 {
+                    write!(f, ", ")?;
+                }
+
+                write!(f, "({dependency})")?;
+            }
+
+            write!(f, "]")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -849,6 +918,23 @@ impl Fat {
             return Err(FatDeserializationError::UnexpectedPaddingByte(padding_byte));
         }
 
+        let mut archive_hash = None;
+        let mut dependencies = Vec::new();
+        if fat_version == FatVersion::Fat5 {
+            archive_hash = Some(data.read_u64::<LE>()?);
+
+            let dependency_count = data.read_u32::<LE>()?;
+            dependencies.reserve(
+                dependency_count
+                    .try_into()
+                    .expect("u32 should fit into usize on PCs"),
+            );
+            for _ in 0..dependency_count {
+                let dependency = Dependency::deserialize(&mut data)?;
+                dependencies.push(dependency);
+            }
+        }
+
         let entry_count = data.read_u32::<LE>()?;
         let mut entries = Vec::with_capacity(
             entry_count
@@ -867,6 +953,8 @@ impl Fat {
                 platform,
                 compression_version,
                 name_hash_version,
+                archive_hash,
+                dependencies,
             },
             entries,
         })
@@ -885,7 +973,7 @@ impl Fat {
     }
 
     pub fn serialize(&self, mut out: impl Write) -> Result<(), FatSerializationError> {
-        let metadata = self.metadata;
+        let metadata = &self.metadata;
         let entries = &self.entries;
 
         let magic = match metadata.fat_version {
@@ -902,6 +990,24 @@ impl Fat {
         out.write_u8(metadata.name_hash_version.into())?;
         out.write_u8(0x00)?;
 
+        if metadata.fat_version == FatVersion::Fat5 {
+            out.write_u64::<LE>(
+                metadata
+                    .archive_hash
+                    .ok_or(FatSerializationError::MissingArchiveHash)?,
+            )?;
+
+            let dependency_count = metadata.dependencies.len();
+            let dependency_count: u32 = dependency_count
+                .try_into()
+                .map_err(|_| FatSerializationError::DependencyCountWontFit(dependency_count))?;
+            out.write_u32::<LE>(dependency_count)?;
+
+            for dependency in &metadata.dependencies {
+                dependency.serialize(&mut out)?;
+            }
+        }
+
         let entry_count = entries.len();
         let entry_count: u32 = entry_count
             .try_into()
@@ -914,6 +1020,11 @@ impl Fat {
                 metadata.entry_version,
                 metadata.compression_version,
             )?;
+        }
+
+        // Duplicate count
+        if metadata.entry_version == EntryVersion::V13 {
+            out.write_u32::<LE>(0)?;
         }
 
         // Localization count
