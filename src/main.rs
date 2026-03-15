@@ -116,14 +116,10 @@ enum Action {
         #[arg(short, long)]
         platform: Option<Platform>,
 
-        /// Compression version
-        ///
         /// Changes which compression schemes are available and their IDs.
         #[arg(short, long)]
         compression_version: Option<CompressionVersion>,
-
-        /// Name hash version
-        ///
+        
         /// Does not seem to affect anything.
         #[arg(short, long)]
         name_hash_version: Option<NameHashVersion>,
@@ -131,7 +127,7 @@ enum Action {
         /// Preset for FAT metadata
         ///
         /// Manually specifying a metadata field using a flag such as --fat-version, --platform
-        /// will override the preset.
+        /// will override the field from the preset.
         ///
         /// wd1-win64: Used by all archives except "sound*" archives in the Windows version of
         /// Watch Dogs 1.
