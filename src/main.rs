@@ -15,7 +15,7 @@ use disrupt_bigfile::fat::{
     CompressionVersion, EntryVersion, Fat, FatMetadata, FatVersion, NameHashVersion, Platform,
 };
 
-fn existing_file(source: &str) -> Result<PathBuf, String> {
+fn existing_file_parser(source: &str) -> Result<PathBuf, String> {
     let path = Path::new(source);
     let metadata = path.metadata().map_err(|err| err.to_string())?;
 
@@ -26,7 +26,7 @@ fn existing_file(source: &str) -> Result<PathBuf, String> {
     }
 }
 
-fn existing_dir(source: &str) -> Result<PathBuf, String> {
+fn existing_dir_parser(source: &str) -> Result<PathBuf, String> {
     let path = Path::new(source);
     let metadata = path.metadata().map_err(|err| err.to_string())?;
 
@@ -57,7 +57,7 @@ enum Action {
     /// Display info from a FAT's header
     Info {
         /// Path to a FAT file
-        #[arg(value_parser = existing_file)]
+        #[arg(value_parser = existing_file_parser)]
         fat: PathBuf,
 
         /// Print out info in a short one-line format
@@ -67,7 +67,7 @@ enum Action {
     /// List files in a FAT without unpacking anything
     List {
         /// Path to a FAT file
-        #[arg(value_parser = existing_file)]
+        #[arg(value_parser = existing_file_parser)]
         fat: PathBuf,
 
         /// Print out compressed size, compression scheme and offset alongside entry filename
@@ -77,11 +77,11 @@ enum Action {
     /// Extract files from a BigFile to a directory
     Unpack {
         /// Path to the FAT file
-        #[arg(value_parser = existing_file)]
+        #[arg(value_parser = existing_file_parser)]
         fat: PathBuf,
 
         /// Path to the DAT file
-        #[arg(value_parser = existing_file)]
+        #[arg(value_parser = existing_file_parser)]
         dat: Option<PathBuf>,
 
         /// Path to the output directory.
@@ -91,7 +91,7 @@ enum Action {
     /// Create a BigFile from a directory
     Pack {
         /// Path to the directory
-        #[arg(value_parser = existing_dir)]
+        #[arg(value_parser = existing_dir_parser)]
         dir: PathBuf,
 
         /// Path to the directory where the DAT and FAT will be created
