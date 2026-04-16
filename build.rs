@@ -1,9 +1,12 @@
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::env;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use std::{env, fs};
+
+use rkyv::rancor::Error;
+use rkyv::{Archive, Serialize};
 
 fn fnv1_hash(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xCBF2_9CE4_8422_2325; // Set hash to default seed
@@ -176,94 +179,94 @@ const FILELIST_PATHS: [&str; 157] = [
     "wdl/worlds/london/london_ultra.filelist",
 ];
 
+#[derive(Archive, Serialize)]
+struct NameHashDb {
+    entries: Vec<(u64, String)>,
+}
+
 fn main() -> Result<(), String> {
     println!("cargo::rerun-if-changed=filelists");
 
-    let mut hash_source_map = HashMap::new();
-    let mut colliding_hashes = Vec::new();
+    let mut hash_filename_map = HashMap::new();
+    let mut colliding_hashes = HashSet::new();
 
     for filelist_path in FILELIST_PATHS {
+        let mut new_filenames_count = 0;
+
         let hash_32_bit = filelist_path.starts_with("wd1");
 
         let filelist_path: PathBuf = ["filelists", filelist_path].iter().collect();
-        let file = BufReader::new(File::open(&filelist_path).map_err(|err| format!("error while opening filelist {}: {err}; make sure you have cloned the repo with submodules", filelist_path.display()))?);
+        let filelist_file = BufReader::new(File::open(&filelist_path).map_err(|err| format!("failed to open filelist {}: {err}; make sure you have cloned the repo with submodules", filelist_path.display()))?);
 
-        let mut new_entries_count = 0;
-
-        for line in file.lines() {
-            let line = line.map_err(|err| {
+        for filename in filelist_file.lines() {
+            let filename = filename.map_err(|err| {
                 format!(
-                    "failed to read all lines from {}: {err}",
+                    "failed to read all filenames from {}: {err}",
                     filelist_path.display()
                 )
             })?;
 
-            if line.starts_with(';') {
+            if filename.starts_with(';') {
                 continue;
             }
 
-            let mut hash = fnv1_hash(line.as_bytes());
+            let mut name_hash = fnv1_hash(filename.as_bytes());
             if hash_32_bit {
-                hash &= 0xFFFF_FFFF;
+                name_hash &= 0xFFFF_FFFF;
             }
 
-            if colliding_hashes.contains(&hash) {
+            if colliding_hashes.contains(&name_hash) {
                 continue;
             }
 
-            match hash_source_map.entry(hash) {
+            match hash_filename_map.entry(name_hash) {
                 Entry::Occupied(entry) => {
-                    let other_source = entry.get();
-                    if line != *other_source {
-                        println!("collision: {line} vs {other_source}");
+                    let other_filename = entry.get();
 
+                    if *other_filename != filename {
+                        println!("collision: '{other_filename}' vs '{filename}'");
+
+                        colliding_hashes.insert(name_hash);
                         entry.remove();
-                        colliding_hashes.push(hash);
                     }
                 }
                 Entry::Vacant(entry) => {
-                    entry.insert(line);
-                    new_entries_count += 1;
+                    entry.insert(filename);
+                    new_filenames_count += 1;
                 }
             }
         }
 
         println!(
-            "read {new_entries_count} new entries from {}",
+            "read {new_filenames_count} new filenames from {}",
             filelist_path.display()
         );
     }
 
     println!(
-        "read {} entries total; {} collisions. processing sources...",
-        hash_source_map.len(),
-        colliding_hashes.len()
+        "read {} filenames, {} collisions. building db file...",
+        hash_filename_map.len(),
+        colliding_hashes.len(),
     );
 
-    let mut phf_hash_source_map = phf_codegen::Map::new();
+    let mut entries: Vec<(u64, String)> = hash_filename_map
+        .into_iter()
+        .map(|(hash, filename)| (hash, filename.replace('\\', "/")))
+        .collect();
+    entries.sort_unstable_by_key(|entry| entry.0);
 
-    for (hash, source) in hash_source_map {
-        let mut phf_source = String::with_capacity(source.len() + 2);
-        phf_source.push('"');
-        phf_source.push_str(&source.replace('\\', "/"));
-        phf_source.push('"');
+    let db = NameHashDb { entries };
+    let db_bytes = rkyv::to_bytes::<Error>(&db)
+        .map_err(|err| format!("failed to serialize name hash db: {err}"))?;
 
-        phf_hash_source_map.entry(hash, phf_source);
-    }
+    let out_dir_path =
+        env::var("OUT_DIR").map_err(|err| format!("failed to get env var 'OUT_DIR': {err}"))?;
+    let archive_path: PathBuf = [&out_dir_path, "name_hash_db.rkyv"].iter().collect();
 
-    println!("done. building phf map...");
+    fs::write(&archive_path, db_bytes)
+        .map_err(|err| format!("failed to write db to file: {err}"))?;
 
-    let outfile_path: PathBuf = [
-        &env::var("OUT_DIR").expect("OUT_DIR should be set by cargo"),
-        "hash_source_map.rs",
-    ]
-    .iter()
-    .collect();
-    let mut outfile =
-        File::create(&outfile_path).map_err(|err| format!("failed to create outfile: {err}"))?;
-
-    write!(&mut outfile, "{}", phf_hash_source_map.build())
-        .map_err(|err| format!("failed to write to outfile: {err}"))?;
+    println!("all done!");
 
     Ok(())
 }

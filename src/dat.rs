@@ -65,7 +65,7 @@ impl<R: Read + Seek> Dat<R> {
             CompressionScheme::None => {
                 let copied = io::copy(&mut raw_data, &mut out)?;
 
-                if copied == entry.uncompressed_size.into() {
+                if copied == u64::from(entry.uncompressed_size) {
                     Ok(())
                 } else {
                     Err(io::Error::new(

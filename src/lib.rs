@@ -1,5 +1,5 @@
 mod compression;
-mod filelists;
+mod name_hash_db;
 
 pub mod builder;
 pub mod dat;

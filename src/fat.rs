@@ -8,7 +8,7 @@ use byteorder::BE;
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 use clap::ValueEnum;
 
-use crate::filelists;
+use crate::name_hash_db;
 
 const FAT3_MAGIC: u32 = 0x4641_5433;
 const FAT5_MAGIC: u32 = 0x4641_5435;
@@ -879,7 +879,7 @@ impl Entry {
     }
 
     pub fn path(&self) -> PathBuf {
-        filelists::HASH_SOURCE_MAP.get(&self.name_hash).map_or_else(
+        name_hash_db::get(self.name_hash).map_or_else(
             || format!("__UNKNOWN/{:X}", self.name_hash).into(),
             PathBuf::from,
         )
