@@ -20,8 +20,11 @@ macro_rules! include_archive_bytes {
 static ALIGNED_ARCHIVE_BYTES: Align<[u8; include_archive_bytes!().len()]> =
     Align(*include_archive_bytes!());
 
-static NAME_HASH_DB: LazyLock<&ArchivedNameHashDb> =
-    LazyLock::new(|| unsafe { rkyv::access_unchecked(&ALIGNED_ARCHIVE_BYTES.0) });
+static NAME_HASH_DB: LazyLock<&ArchivedNameHashDb> = LazyLock::new(|| {
+    // SAFETY: build.rs guarantees that name_hash_db.rkyv contains valid data.
+    // rkyv::util::Align guarantees that the buffer is properly aligned.
+    unsafe { rkyv::access_unchecked(&ALIGNED_ARCHIVE_BYTES.0) }
+});
 
 pub fn get(hash: u64) -> Option<&'static str> {
     let idx = NAME_HASH_DB
