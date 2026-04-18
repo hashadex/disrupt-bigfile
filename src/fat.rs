@@ -375,7 +375,7 @@ impl Entry {
             deserializer(&buf)?;
 
         let compression_scheme =
-            CompressionScheme::from_scheme_id(compression_scheme_id, compression_version)?;
+            CompressionScheme::try_from_scheme_id(compression_scheme_id, compression_version)?;
 
         // For some reason, if the entry's compression scheme is None, uncompressed size is set to
         // 0 and compressed size is set to the size of the entry. Let's set both to the same value
@@ -450,7 +450,7 @@ impl Entry {
         } else {
             self.uncompressed_size
         };
-        let compression_scheme_id = self.compression_scheme.as_scheme_id(compression_version)?;
+        let compression_scheme_id = self.compression_scheme.try_to_scheme_id(compression_version)?;
 
         let mut buf = Vec::new();
 
@@ -500,7 +500,7 @@ impl Fat {
         let fat_version = FatVersion::try_from_magic(data.read_u32::<LE>()?)?;
         let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
 
-        let platform = Platform::from_platform_id(data.read_u8()?, fat_version)?;
+        let platform = Platform::try_from_platform_id(data.read_u8()?, fat_version)?;
         let compression_version = CompressionVersion::try_from(data.read_u8()?)?;
         let name_hash_version = NameHashVersion::try_from(data.read_u8()?)?;
         let padding_byte = data.read_u8()?;
@@ -572,7 +572,7 @@ impl Fat {
         out.write_u32::<LE>(metadata.entry_version.into())?;
 
         // Flags
-        out.write_u8(metadata.platform.as_platform_id(metadata.fat_version)?)?;
+        out.write_u8(metadata.platform.try_to_platform_id(metadata.fat_version)?)?;
         out.write_u8(metadata.compression_version.into())?;
         out.write_u8(metadata.name_hash_version.into())?;
         out.write_u8(0x00)?;

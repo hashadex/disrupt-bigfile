@@ -100,7 +100,7 @@ pub enum Platform {
 }
 
 impl Platform {
-    pub fn from_platform_id(
+    pub fn try_from_platform_id(
         platform_id: u8,
         fat_version: FatVersion,
     ) -> Result<Self, FatDeserializationError> {
@@ -119,7 +119,7 @@ impl Platform {
         }
     }
 
-    pub fn as_platform_id(self, fat_version: FatVersion) -> Result<u8, FatSerializationError> {
+    pub fn try_to_platform_id(self, fat_version: FatVersion) -> Result<u8, FatSerializationError> {
         match (fat_version, self) {
             (_, Self::Any) => Ok(0),
             (FatVersion::Fat3, Self::Win32) | (FatVersion::Fat5, Self::Win64) => Ok(1),
@@ -377,7 +377,7 @@ impl fmt::Display for CompressionScheme {
 }
 
 impl CompressionScheme {
-    pub fn from_scheme_id(
+    pub fn try_from_scheme_id(
         scheme_id: u8,
         compression_version: CompressionVersion,
     ) -> Result<Self, FatDeserializationError> {
@@ -399,7 +399,7 @@ impl CompressionScheme {
         }
     }
 
-    pub fn as_scheme_id(
+    pub fn try_to_scheme_id(
         self,
         compression_version: CompressionVersion,
     ) -> Result<u8, FatSerializationError> {
