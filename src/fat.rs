@@ -562,9 +562,8 @@ impl Fat {
         Self::deserialize(file)
     }
 
-    pub fn serialize(&self, mut out: impl Write) -> Result<(), FatSerializationError> {
+    pub fn serialize(&mut self, mut out: impl Write) -> Result<(), FatSerializationError> {
         let metadata = &self.metadata;
-        let entries = &self.entries;
 
         let magic: u32 = metadata.fat_version.to_magic();
         out.write_u32::<LE>(magic)?;
@@ -595,12 +594,15 @@ impl Fat {
             }
         }
 
+        let entries = &mut self.entries;
+
         let entry_count = entries.len();
         let entry_count: u32 = entry_count
             .try_into()
             .map_err(|_| FatSerializationError::EntryCountWontFit(entry_count))?;
         out.write_u32::<LE>(entry_count)?;
 
+        entries.sort_unstable_by_key(|entry| entry.name_hash);
         for entry in entries {
             entry.serialize(
                 &mut out,
