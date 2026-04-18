@@ -65,8 +65,6 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         (self.fat, self.dat)
     }
 
-    const FNV1_SEED: u64 = 0xCBF2_9CE4_8422_2325;
-
     fn compute_name_hash(&self, relative_entry_path: &impl AsRef<Path>) -> Result<u64, PackError> {
         let path = relative_entry_path.as_ref();
 
@@ -82,7 +80,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         } else {
             let windows_path = path.to_string_lossy().to_lowercase().replace('/', "\\");
 
-            hash = Self::FNV1_SEED;
+            hash = 0xCBF2_9CE4_8422_2325; // Set hash to default seed
 
             for byte in windows_path.bytes() {
                 hash = hash.wrapping_mul(0x0100_0000_01B3);
