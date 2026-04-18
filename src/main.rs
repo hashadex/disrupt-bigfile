@@ -11,8 +11,9 @@ use walkdir::WalkDir;
 
 use disrupt_bigfile::builder::ArchiveBuilder;
 use disrupt_bigfile::dat::Dat;
-use disrupt_bigfile::fat::{
-    CompressionVersion, Dependency, EntryVersion, Fat, FatMetadata, FatVersion, NameHashVersion,
+use disrupt_bigfile::fat::Fat;
+use disrupt_bigfile::metadata::{
+    CompressionVersion, Dependency, EntryVersion, FatMetadata, FatVersion, NameHashVersion,
     Platform,
 };
 

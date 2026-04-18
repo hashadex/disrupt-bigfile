@@ -5,7 +5,8 @@ use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom, Take, Write};
 use std::path::{Path, PathBuf};
 
 use crate::compression::{self, XMemCompressError};
-use crate::fat::{CompressionScheme, Entry};
+use crate::fat::Entry;
+use crate::metadata::CompressionScheme;
 
 #[derive(Debug)]
 pub enum UnpackError {
