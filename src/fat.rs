@@ -450,7 +450,9 @@ impl Entry {
         } else {
             self.uncompressed_size
         };
-        let compression_scheme_id = self.compression_scheme.try_to_scheme_id(compression_version)?;
+        let compression_scheme_id = self
+            .compression_scheme
+            .try_to_scheme_id(compression_version)?;
 
         let mut buf = Vec::new();
 
@@ -557,7 +559,7 @@ impl Fat {
         }
     }
 
-    pub fn open(path: &impl AsRef<Path>) -> Result<Self, FatDeserializationError> {
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, FatDeserializationError> {
         let file = BufReader::new(File::open(path)?);
         Self::deserialize(file)
     }

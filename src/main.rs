@@ -236,7 +236,7 @@ fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
 }
 
 fn list(fat_path: PathBuf, verbose: bool) -> Result<(), Box<dyn Error>> {
-    let fat = Fat::open(&fat_path)?;
+    let fat = Fat::open(fat_path)?;
 
     let mut lock = io::stdout().lock();
     for entry in fat.entries {
@@ -323,7 +323,7 @@ fn pack(
 
     fs::create_dir_all(&out_dir)?;
 
-    let outfiles_base_path: PathBuf = [out_dir, archive_name.into()].iter().collect();
+    let outfiles_base_path = out_dir.join(archive_name);
     let fat_path = outfiles_base_path.with_extension("fat");
     let dat_path = outfiles_base_path.with_extension("dat");
 
@@ -331,7 +331,7 @@ fn pack(
     eprintln!("\tFAT: {}", fat_path.display());
     eprintln!("\tDAT: {}", dat_path.display());
 
-    let mut builder = ArchiveBuilder::create(metadata, &dat_path)?;
+    let mut builder = ArchiveBuilder::create(metadata, dat_path)?;
 
     let spinner = ProgressBar::no_length().with_style(
         ProgressStyle::with_template("{spinner} Packed files: {pos}")
@@ -346,13 +346,13 @@ fn pack(
         let relative_entry_path = entry.path().strip_prefix(&in_dir)?;
 
         builder
-            .add_file(&in_dir, &relative_entry_path)
+            .add_file(&in_dir, relative_entry_path)
             .map_err(|err| format!("failed to add {}: {err}", entry.path().display()))?;
 
         spinner.inc(1);
     }
 
-    builder.create_fat(&fat_path)?;
+    builder.create_fat(fat_path)?;
 
     spinner.finish_and_clear();
 

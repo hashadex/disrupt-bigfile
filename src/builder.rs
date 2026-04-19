@@ -65,7 +65,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         (self.fat, self.dat)
     }
 
-    fn compute_name_hash(&self, relative_entry_path: &impl AsRef<Path>) -> Result<u64, PackError> {
+    fn compute_name_hash(&self, relative_entry_path: impl AsRef<Path>) -> Result<u64, PackError> {
         let path = relative_entry_path.as_ref();
 
         let mut hash;
@@ -98,7 +98,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
     pub fn add(
         &mut self,
         mut data: impl Read,
-        relative_entry_path: &impl AsRef<Path>,
+        relative_entry_path: impl AsRef<Path>,
     ) -> Result<(), PackError> {
         // If the last add failed, dat_position might not accurately reflect dat's actual position.
         // Let's fix this by rewinding dat to the position after the last successful add() call.
@@ -130,23 +130,20 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
 
     pub fn add_file(
         &mut self,
-        archive_root: &impl AsRef<Path>,
-        relative_entry_path: &impl AsRef<Path>,
+        archive_root: impl AsRef<Path>,
+        relative_entry_path: impl AsRef<Path>,
     ) -> Result<(), PackError> {
-        let archive_root = archive_root.as_ref();
-        let relative_entry_path = relative_entry_path.as_ref();
-
-        let file_path: PathBuf = [archive_root, relative_entry_path].iter().collect();
+        let file_path = archive_root.as_ref().join(&relative_entry_path);
         let file = File::open(file_path)?;
 
-        self.add(file, &relative_entry_path)
+        self.add(file, relative_entry_path)
     }
 
     pub fn write_fat(&mut self, out: impl Write) -> Result<(), FatSerializationError> {
         self.fat.serialize(out)
     }
 
-    pub fn create_fat(&mut self, fat_path: &impl AsRef<Path>) -> Result<(), FatSerializationError> {
+    pub fn create_fat(&mut self, fat_path: impl AsRef<Path>) -> Result<(), FatSerializationError> {
         let fat_file = BufWriter::new(File::create(fat_path)?);
 
         self.write_fat(fat_file)
