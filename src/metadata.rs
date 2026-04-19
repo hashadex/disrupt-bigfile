@@ -392,6 +392,7 @@ impl CompressionScheme {
             (2, CompressionVersion::V6) | (3, CompressionVersion::V8 | CompressionVersion::V9) => {
                 Ok(Self::LZ4LW)
             }
+            (1, CompressionVersion::V8 | CompressionVersion::V9) => Ok(Self::Oodle),
             _ => Err(FatDeserializationError::UnknownCompressionScheme {
                 scheme_id,
                 compression_version,
