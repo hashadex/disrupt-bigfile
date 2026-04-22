@@ -18,7 +18,7 @@ use disrupt_bigfile::metadata::{
 };
 
 fn existing_file_parser(source: &str) -> Result<PathBuf, io::Error> {
-    let path = PathBuf::from(source);
+    let path = PathBuf::from(source).canonicalize()?;
     let metadata = path.metadata()?;
 
     if metadata.is_file() {
@@ -29,7 +29,7 @@ fn existing_file_parser(source: &str) -> Result<PathBuf, io::Error> {
 }
 
 fn existing_dir_parser(source: &str) -> Result<PathBuf, io::Error> {
-    let path = PathBuf::from(source);
+    let path = PathBuf::from(source).canonicalize()?;
     let metadata = path.metadata()?;
 
     if metadata.is_dir() {
@@ -322,6 +322,7 @@ fn pack(
         .unwrap_or("out".into());
 
     fs::create_dir_all(&out_dir)?;
+    let out_dir = out_dir.canonicalize()?;
 
     let outfiles_base_path = out_dir.join(archive_name);
     let fat_path = outfiles_base_path.with_extension("fat");
@@ -331,7 +332,7 @@ fn pack(
     eprintln!("\tFAT: {}", fat_path.display());
     eprintln!("\tDAT: {}", dat_path.display());
 
-    let mut builder = ArchiveBuilder::create(metadata, dat_path)?;
+    let mut builder = ArchiveBuilder::create(metadata, &dat_path)?;
 
     let spinner = ProgressBar::no_length().with_style(
         ProgressStyle::with_template("{spinner} Packed files: {pos}")
@@ -339,7 +340,7 @@ fn pack(
     );
     for entry in WalkDir::new(&in_dir) {
         let entry = entry?;
-        if entry.file_type().is_dir() {
+        if entry.file_type().is_dir() || entry.path() == out_dir {
             continue;
         }
 
