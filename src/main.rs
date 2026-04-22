@@ -210,7 +210,7 @@ fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
             "{}\n",
             fat_path
                 .file_name()
-                .expect("existing_file() should guarantee that fat_path has a filename")
+                .expect("existing_file_parser() should guarantee that fat_path has a filename")
                 .display()
         );
 
