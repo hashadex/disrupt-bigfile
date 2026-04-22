@@ -2,7 +2,7 @@ use std::error::Error;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
@@ -17,25 +17,25 @@ use disrupt_bigfile::metadata::{
     Platform,
 };
 
-fn existing_file_parser(source: &str) -> Result<PathBuf, String> {
-    let path = Path::new(source);
-    let metadata = path.metadata().map_err(|err| err.to_string())?;
+fn existing_file_parser(source: &str) -> Result<PathBuf, io::Error> {
+    let path = PathBuf::from(source);
+    let metadata = path.metadata()?;
 
     if metadata.is_file() {
-        Ok(path.to_path_buf())
+        Ok(path)
     } else {
-        Err("is not a file".to_string())
+        Err(io::ErrorKind::IsADirectory.into())
     }
 }
 
-fn existing_dir_parser(source: &str) -> Result<PathBuf, String> {
-    let path = Path::new(source);
-    let metadata = path.metadata().map_err(|err| err.to_string())?;
+fn existing_dir_parser(source: &str) -> Result<PathBuf, io::Error> {
+    let path = PathBuf::from(source);
+    let metadata = path.metadata()?;
 
     if metadata.is_dir() {
-        Ok(path.to_path_buf())
+        Ok(path)
     } else {
-        Err("is not a directory".to_string())
+        Err(io::ErrorKind::NotADirectory.into())
     }
 }
 
