@@ -107,6 +107,8 @@ enum Action {
         dat: Option<PathBuf>,
 
         /// Path to the output directory.
+        /// 
+        /// If this directory does not exist, it will be created.
         #[arg(short, long, default_value = "./out/")]
         out: PathBuf,
     },
