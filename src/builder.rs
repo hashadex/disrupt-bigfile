@@ -86,6 +86,12 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
                 hash = hash.wrapping_mul(0x0100_0000_01B3);
                 hash ^= u64::from(byte);
             }
+
+            if self.fat.metadata.fat_version == FatVersion::Fat5 {
+                // The three highest bits in all FAT5 name hashes seem to be always set to 101.
+                hash &= 0x1FFF_FFFF_FFFF_FFFF; // 0b0001_1111...
+                hash |= 0xA000_0000_0000_0000; // 0b1010_0000...
+            }
         }
 
         if self.fat.metadata.fat_version == FatVersion::Fat3 {

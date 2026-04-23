@@ -193,7 +193,7 @@ fn main() -> Result<(), String> {
     for filelist_path in FILELIST_PATHS {
         let mut new_filenames_count = 0;
 
-        let hash_32_bit = filelist_path.starts_with("wd1");
+        let fat3_hash = filelist_path.starts_with("wd1");
 
         let filelist_path: PathBuf = ["filelists", filelist_path].iter().collect();
         let filelist_file = BufReader::new(File::open(&filelist_path).map_err(|err| format!("failed to open filelist {}: {err}; make sure you have cloned the repo with submodules", filelist_path.display()))?);
@@ -211,8 +211,11 @@ fn main() -> Result<(), String> {
             }
 
             let mut name_hash = fnv1_hash(filename.as_bytes());
-            if hash_32_bit {
+            if fat3_hash {
                 name_hash &= 0xFFFF_FFFF;
+            } else {
+                name_hash &= 0x1FFF_FFFF_FFFF_FFFF;
+                name_hash |= 0xA000_0000_0000_0000;
             }
 
             if colliding_hashes.contains(&name_hash) {
