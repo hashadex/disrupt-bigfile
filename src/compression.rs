@@ -21,6 +21,10 @@ pub enum XMemCompressError {
     UnknownFlags(u32),
     UnsupportedWindowSize(u32),
     UnexpectedCompressionPartitionSize(u32),
+    InvalidChunkSize {
+        chunk_num: u64,
+        size: u32,
+    },
     LzxdError {
         chunk_num: u64,
         err: lzxd::DecompressError,
@@ -64,6 +68,9 @@ impl fmt::Display for XMemCompressError {
                 f,
                 "unexpected compression partition size {part_size}, expected {XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE}"
             ),
+            Self::InvalidChunkSize { chunk_num, size } => {
+                write!(f, "chunk #{chunk_num} has an invalid size of {size}")
+            }
             Self::LzxdError { chunk_num, err } => {
                 write!(f, "lzxd error on chunk #{chunk_num}: {err}")
             }
@@ -169,7 +176,12 @@ pub fn decompress_xmemcompress(
             input.seek_relative(1)?;
         }
 
-        let chunk_buf_size: usize = (chunk_size - internal_header_size)
+        let chunk_buf_size: usize = chunk_size
+            .checked_sub(internal_header_size)
+            .ok_or(XMemCompressError::InvalidChunkSize {
+                chunk_num,
+                size: chunk_size,
+            })?
             .try_into()
             .expect("u32 should fit into usize on PCs");
         let mut compressed_chunk_buf = vec![0; chunk_buf_size];
