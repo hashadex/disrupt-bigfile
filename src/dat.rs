@@ -4,11 +4,11 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Take, Write};
 use std::path::Path;
 
-use crate::compression;
+use crate::compression::xmemcompress;
 use crate::fat::Entry;
 use crate::metadata::CompressionScheme;
 
-pub use crate::compression::XMemCompressError;
+pub use crate::compression::xmemcompress::XMemCompressError;
 
 #[derive(Debug)]
 pub enum UnpackError {
@@ -73,7 +73,7 @@ impl<R: Read + Seek> Dat<R> {
             CompressionScheme::None => io::copy(&mut raw_data, &mut out).map_err(UnpackError::Io),
             CompressionScheme::LZO1x => todo!(),
             CompressionScheme::Zlib => todo!(),
-            CompressionScheme::XMemCompress => compression::decompress_xmemcompress(raw_data, out)
+            CompressionScheme::XMemCompress => xmemcompress::decompress_xmemcompress(raw_data, out)
                 .map_err(UnpackError::XMemCompress),
             CompressionScheme::LZMA => todo!(),
             CompressionScheme::LZ4LW => todo!(),
