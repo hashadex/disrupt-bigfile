@@ -83,7 +83,7 @@ impl std::error::Error for XMemCompressError {}
 pub fn decompress_xmemcompress(
     mut input: impl Read + Seek,
     mut out: impl Write,
-) -> Result<(), XMemCompressError> {
+) -> Result<u64, XMemCompressError> {
     let magic = input.read_u32::<BE>()?;
     if magic != XMEMCOMPRESS_LZXNATIVE_SIGNATURE {
         return Err(XMemCompressError::BadMagic(magic));
@@ -137,6 +137,7 @@ pub fn decompress_xmemcompress(
     // u32 largest_compressed_chunk_size
     input.seek_relative(16)?;
 
+    let mut decompressed = 0;
     let expected_chunk_count = uncompressed_file_size.div_ceil(compression_partition_size.into());
     for chunk_num in 0..expected_chunk_count {
         // Each chunk in the 0F F5 12 EE format has two headers: external and internal.
@@ -196,9 +197,11 @@ pub fn decompress_xmemcompress(
             .map_err(|err| XMemCompressError::LzxdError { chunk_num, err })?;
 
         out.write_all(decompressed_chunk_buf)?;
+        decompressed +=
+            u64::try_from(decompressed_chunk_buf.len()).expect("usize should fit into u64 on PCs");
     }
 
     out.flush()?;
 
-    Ok(())
+    Ok(decompressed)
 }

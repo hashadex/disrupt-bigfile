@@ -1,7 +1,7 @@
 use std::error;
 use std::fmt;
 use std::fs::{self, File};
-use std::io::{self, BufReader, ErrorKind, Read, Seek, SeekFrom, Take, Write};
+use std::io::{self, BufReader, Read, Seek, SeekFrom, Take, Write};
 use std::path::Path;
 
 use crate::compression::{self, XMemCompressError};
@@ -11,6 +11,7 @@ use crate::metadata::CompressionScheme;
 #[derive(Debug)]
 pub enum UnpackError {
     Io(io::Error),
+    SizeMismatch { expected: u32, actual: u64 },
     XMemCompress(XMemCompressError),
 }
 
@@ -30,6 +31,10 @@ impl fmt::Display for UnpackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(f, "io error: {err}"),
+            Self::SizeMismatch { expected, actual } => write!(
+                f,
+                "expected to unpack {expected} bytes, but unpacked {actual}"
+            ),
             Self::XMemCompress(err) => write!(f, "XMemCompress error: {err}"),
         }
     }
@@ -62,32 +67,24 @@ impl<R: Read + Seek> Dat<R> {
     ) -> Result<(), UnpackError> {
         let mut raw_data = self.raw_entry_data(entry)?;
 
-        match entry.compression_scheme {
-            CompressionScheme::None => {
-                let copied = io::copy(&mut raw_data, &mut out)?;
-
-                if copied == u64::from(entry.uncompressed_size) {
-                    Ok(())
-                } else {
-                    Err(io::Error::new(
-                        ErrorKind::UnexpectedEof,
-                        format!(
-                            "unexpected EOF: expected to copy {} bytes, but copied {copied}",
-                            entry.uncompressed_size
-                        ),
-                    )
-                    .into())
-                }
-            }
+        let decompressed = match entry.compression_scheme {
+            CompressionScheme::None => io::copy(&mut raw_data, &mut out).map_err(UnpackError::Io),
             CompressionScheme::LZO1x => todo!(),
             CompressionScheme::Zlib => todo!(),
-            CompressionScheme::XMemCompress => {
-                compression::decompress_xmemcompress(raw_data, &mut out)
-                    .map_err(XMemCompressError::into)
-            }
+            CompressionScheme::XMemCompress => compression::decompress_xmemcompress(raw_data, out)
+                .map_err(UnpackError::XMemCompress),
             CompressionScheme::LZMA => todo!(),
             CompressionScheme::LZ4LW => todo!(),
             CompressionScheme::Oodle => todo!(),
+        }?;
+
+        if decompressed == u64::from(entry.uncompressed_size) {
+            Ok(())
+        } else {
+            Err(UnpackError::SizeMismatch {
+                expected: entry.uncompressed_size,
+                actual: decompressed,
+            })
         }
     }
 
