@@ -4,22 +4,30 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Take, Write};
 use std::path::Path;
 
-use crate::compression::xmemcompress;
+use crate::compression::{lz4lw, xmemcompress};
 use crate::fat::Entry;
 use crate::metadata::CompressionScheme;
 
+pub use crate::compression::lz4lw::LZ4LWError;
 pub use crate::compression::xmemcompress::XMemCompressError;
 
 #[derive(Debug)]
 pub enum UnpackError {
     Io(io::Error),
     SizeMismatch { expected: u32, actual: u64 },
+    LZ4LW(LZ4LWError),
     XMemCompress(XMemCompressError),
 }
 
 impl From<io::Error> for UnpackError {
     fn from(err: io::Error) -> Self {
         Self::Io(err)
+    }
+}
+
+impl From<LZ4LWError> for UnpackError {
+    fn from(err: LZ4LWError) -> Self {
+        Self::LZ4LW(err)
     }
 }
 
@@ -37,6 +45,7 @@ impl fmt::Display for UnpackError {
                 f,
                 "expected to unpack {expected} bytes, but unpacked {actual}"
             ),
+            Self::LZ4LW(err) => write!(f, "LZ4LW error: {err}"),
             Self::XMemCompress(err) => write!(f, "XMemCompress error: {err}"),
         }
     }
@@ -76,7 +85,9 @@ impl<R: Read + Seek> Dat<R> {
             CompressionScheme::XMemCompress => xmemcompress::decompress_xmemcompress(raw_data, out)
                 .map_err(UnpackError::XMemCompress),
             CompressionScheme::LZMA => todo!(),
-            CompressionScheme::LZ4LW => todo!(),
+            CompressionScheme::LZ4LW => {
+                lz4lw::decompress_lz4lw(raw_data, out, entry).map_err(UnpackError::LZ4LW)
+            }
             CompressionScheme::Oodle => todo!(),
         }?;
 
