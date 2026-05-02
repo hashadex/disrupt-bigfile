@@ -4,9 +4,11 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Take, Write};
 use std::path::Path;
 
-use crate::compression::{self, XMemCompressError};
+use crate::compression;
 use crate::fat::Entry;
 use crate::metadata::CompressionScheme;
+
+pub use crate::compression::XMemCompressError;
 
 #[derive(Debug)]
 pub enum UnpackError {
