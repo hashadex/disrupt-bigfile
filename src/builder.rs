@@ -1,4 +1,3 @@
-use std::error;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
@@ -38,7 +37,7 @@ impl fmt::Display for PackError {
     }
 }
 
-impl error::Error for PackError {}
+impl std::error::Error for PackError {}
 
 pub struct ArchiveBuilder<W: Write + Seek> {
     fat: Fat,

@@ -1,4 +1,3 @@
-use std::error;
 use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Take, Write};
@@ -51,7 +50,7 @@ impl fmt::Display for UnpackError {
     }
 }
 
-impl error::Error for UnpackError {}
+impl std::error::Error for UnpackError {}
 
 pub struct Dat<R: Read + Seek> {
     inner: R,

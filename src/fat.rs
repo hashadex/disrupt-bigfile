@@ -1,4 +1,3 @@
-use std::error;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, Read, Write};
@@ -78,7 +77,7 @@ impl fmt::Display for FatDeserializationError {
     }
 }
 
-impl error::Error for FatDeserializationError {}
+impl std::error::Error for FatDeserializationError {}
 
 #[derive(Debug)]
 pub enum FatSerializationError {
@@ -156,7 +155,7 @@ impl fmt::Display for FatSerializationError {
     }
 }
 
-impl error::Error for FatSerializationError {}
+impl std::error::Error for FatSerializationError {}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Entry {
