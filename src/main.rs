@@ -106,7 +106,7 @@ enum Action {
         #[arg(value_parser = existing_file_parser)]
         dat: Option<PathBuf>,
 
-        /// Path to the output directory.
+        /// Path to the output directory
         ///
         /// If this directory does not exist, it will be created.
         #[arg(short, long, default_value = "./out/")]
@@ -128,7 +128,9 @@ enum Action {
         #[arg(long)]
         name: Option<OsString>,
 
-        /// FAT version. FAT3 is used in WD1, and FAT5 is used in WD2 and Legion.
+        /// Affects which metadata fields can be used and the layout of the FAT header
+        ///
+        /// FAT3 is used in WD1, and FAT5 is used in WD2 and Legion.
         #[arg(short, long)]
         fat_version: Option<FatVersion>,
 
@@ -140,18 +142,15 @@ enum Action {
         #[arg(short, long)]
         platform: Option<Platform>,
 
-        /// Changes which compression schemes are available and their IDs.
+        /// Changes which compression schemes are available and their IDs
         #[arg(short, long)]
         compression_version: Option<CompressionVersion>,
 
-        /// Does not seem to affect anything.
+        /// Does not seem to affect anything
         #[arg(short, long)]
         name_hash_version: Option<NameHashVersion>,
 
-        /// Does not seem to affect anything.
-        ///
-        /// Present only in FAT5 archives. It will be ignored if you try to add an archive hash to
-        /// a FAT3 archive.
+        /// Does not seem to affect anything. Available only for FAT5 archives.
         ///
         /// In Watch Dogs 2, it is always set to 0xFFFF_FFFF_FFFF_FFFF in all archives.
         ///
@@ -161,16 +160,14 @@ enum Action {
         #[arg(short, long, value_parser = hex_u64_parser)]
         archive_hash: Option<u64>,
 
-        /// Add a dependency to the archive, as two comma-separated hexadecimal 64-bit integers.
-        /// (for example, "--dependency B78228C0B350CC14,BE38E2B5954E5FA4")
+        /// Add a dependency to the archive, as two comma-separated hexadecimal 64-bit integers,
+        /// for example "--dependency B78228C0B350CC14,BE38E2B5954E5FA4". Available only in FAT5
+        /// archives.
         ///
         /// The first value is the dependency's archive hash and the second value is the
         /// dependency's name hash.
         ///
         /// This option may be used more than once.
-        ///
-        /// Dependencies are only present in FAT5 archives. They will be ignored if you try to add
-        /// dependencies to a FAT3 archive.
         ///
         /// In Watch Dogs 2, dependencies are not present in any of the archives.
         ///
