@@ -61,15 +61,51 @@ fn dependency_parser(source: &str) -> Result<Dependency, String> {
 
 #[derive(Clone, Debug, ValueEnum)]
 enum Preset {
-    Wd1Sound,
+    /// All archives except "sound*" in the Windows version of Watch Dogs 1
     Wd1Win64,
+
+    /// "sound*" archives in the Windows version of Watch Dogs 1
+    Wd1Win64Sound,
+
+    /// All archives except "sound*" in the Wii U version of Watch Dogs 1
+    Wd1WiiU,
+
+    /// "sound*" archives in the Wii U version of Watch Dogs 1
+    Wd1WiiUSound,
+
+    /// All archives except "sound*" in the Windows version of Watch Dogs 2
+    Wd2Win64,
+
+    /// All archives except "sound*" in the PS4 version of Watch Dogs 2
+    Wd2Ps4,
+
+    /// "sound*" archives in the Windows and PS4 versions of Watch Dogs 2
+    Wd2Sound,
+
+    /// All archives except "london" and "london_cache" in the Windows version of Watch Dogs:
+    /// Legion
+    WdlWin64,
+
+    /// "london" archive in the Windows version of Watch Dogs: Legion
+    WdlWin64London,
+
+    /// "london_cache" archive in the Windows version of Watch Dogs: Legion
+    WdlWin64LondonCache,
 }
 
 impl From<Preset> for FatMetadata {
     fn from(preset: Preset) -> Self {
         match preset {
-            Preset::Wd1Sound => Self::WD1_SOUND,
-            Preset::Wd1Win64 => Self::WD1_WIN64,
+            Preset::Wd1Win64 => Self::new_wd1_win64(),
+            Preset::Wd1Win64Sound => Self::new_wd1_win64_sound(),
+            Preset::Wd1WiiU => Self::new_wd1_wiiu(),
+            Preset::Wd1WiiUSound => Self::new_wd1_wiiu_sound(),
+            Preset::Wd2Win64 => Self::new_wd2_win64(),
+            Preset::Wd2Sound => Self::new_wd2_sound(),
+            Preset::Wd2Ps4 => Self::new_wd2_ps4(),
+            Preset::WdlWin64 => Self::new_wdl_win64(),
+            Preset::WdlWin64London => Self::new_wdl_win64_london(),
+            Preset::WdlWin64LondonCache => Self::new_wdl_win64_london_cache(),
         }
     }
 }
@@ -179,11 +215,6 @@ enum Action {
         ///
         /// Manually specifying a metadata field using a flag such as --fat-version, --platform
         /// will override the field from the preset.
-        ///
-        /// wd1-win64: Used by all archives except "sound*" archives in the Windows version of
-        /// Watch Dogs 1.
-        ///
-        /// wd1-sound: Used by "sound*" archives in the Windows version of Watch Dogs 1.
         #[arg(short = 'P', long, default_value = "wd1-win64")]
         preset: Preset,
     },

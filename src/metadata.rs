@@ -296,25 +296,131 @@ pub struct FatMetadata {
 }
 
 impl FatMetadata {
-    pub const WD1_WIN64: FatMetadata = FatMetadata {
-        fat_version: FatVersion::Fat3,
-        entry_version: EntryVersion::V8,
-        platform: Platform::Win64,
-        compression_version: CompressionVersion::V5,
-        name_hash_version: NameHashVersion::V50,
-        archive_hash: None,
-        dependencies: Vec::new(),
-    };
+    pub const fn new_wd1_win64() -> Self {
+        Self {
+            fat_version: FatVersion::Fat3,
+            entry_version: EntryVersion::V8,
+            platform: Platform::Win64,
+            compression_version: CompressionVersion::V5,
+            name_hash_version: NameHashVersion::V50,
+            archive_hash: None,
+            dependencies: vec![],
+        }
+    }
 
-    pub const WD1_SOUND: FatMetadata = FatMetadata {
-        fat_version: FatVersion::Fat3,
-        entry_version: EntryVersion::V8,
-        platform: Platform::Any,
-        compression_version: CompressionVersion::V0,
-        name_hash_version: NameHashVersion::V50,
-        archive_hash: None,
-        dependencies: Vec::new(),
-    };
+    pub const fn new_wd1_win64_sound() -> Self {
+        Self {
+            fat_version: FatVersion::Fat3,
+            entry_version: EntryVersion::V8,
+            platform: Platform::Any,
+            compression_version: CompressionVersion::V0,
+            name_hash_version: NameHashVersion::V50,
+            archive_hash: None,
+            dependencies: vec![],
+        }
+    }
+
+    pub const fn new_wd1_wiiu() -> Self {
+        Self {
+            fat_version: FatVersion::Fat3,
+            entry_version: EntryVersion::V8,
+            platform: Platform::WiiU,
+            compression_version: CompressionVersion::V5,
+            name_hash_version: NameHashVersion::V56,
+            archive_hash: None,
+            dependencies: vec![],
+        }
+    }
+
+    pub const fn new_wd1_wiiu_sound() -> Self {
+        Self {
+            fat_version: FatVersion::Fat3,
+            entry_version: EntryVersion::V8,
+            platform: Platform::Any,
+            compression_version: CompressionVersion::V0,
+            name_hash_version: NameHashVersion::V56,
+            archive_hash: None,
+            dependencies: vec![],
+        }
+    }
+
+    pub const fn new_wd2_win64() -> Self {
+        Self {
+            fat_version: FatVersion::Fat5,
+            entry_version: EntryVersion::V11,
+            platform: Platform::Win64,
+            compression_version: CompressionVersion::V6,
+            name_hash_version: NameHashVersion::V70,
+            archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
+            dependencies: vec![],
+        }
+    }
+
+    pub const fn new_wd2_ps4() -> Self {
+        Self {
+            fat_version: FatVersion::Fat5,
+            entry_version: EntryVersion::V11,
+            platform: Platform::Orbis,
+            compression_version: CompressionVersion::V9,
+            name_hash_version: NameHashVersion::V70,
+            archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
+            dependencies: vec![],
+        }
+    }
+
+    pub const fn new_wd2_sound() -> Self {
+        Self {
+            fat_version: FatVersion::Fat5,
+            entry_version: EntryVersion::V11,
+            platform: Platform::Any,
+            compression_version: CompressionVersion::V0,
+            name_hash_version: NameHashVersion::V70,
+            archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
+            dependencies: vec![],
+        }
+    }
+
+    pub const fn new_wdl_win64() -> Self {
+        Self {
+            fat_version: FatVersion::Fat5,
+            entry_version: EntryVersion::V13,
+            platform: Platform::Win64,
+            compression_version: CompressionVersion::V8,
+            name_hash_version: NameHashVersion::V70,
+            archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
+            dependencies: vec![],
+        }
+    }
+
+    pub fn new_wdl_win64_london() -> Self {
+        Self {
+            fat_version: FatVersion::Fat5,
+            entry_version: EntryVersion::V13,
+            platform: Platform::Win64,
+            compression_version: CompressionVersion::V8,
+            name_hash_version: NameHashVersion::V70,
+            archive_hash: Some(0xA7E2_977F_3F32_B98E),
+            dependencies: vec![Dependency {
+                archive_hash: 0xB782_28C0_B350_CC14,
+                name_hash: 0xBE38_E2B5_954E_5FA4,
+            }],
+        }
+    }
+
+    pub fn new_wdl_win64_london_cache() -> Self {
+        Self {
+            fat_version: FatVersion::Fat5,
+            entry_version: EntryVersion::V13,
+            platform: Platform::Win64,
+            compression_version: CompressionVersion::V8,
+            name_hash_version: NameHashVersion::V70,
+            archive_hash: Some(0xB782_28C0_B350_CC14),
+            dependencies: vec![Dependency {
+                archive_hash: 0xA7E2_977F_3F32_B98E,
+                name_hash: 0xB058_64FD_230C_EA67,
+            }],
+        }
+    }
 }
 
 impl fmt::Display for FatMetadata {
