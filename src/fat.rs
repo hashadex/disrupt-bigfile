@@ -563,7 +563,7 @@ impl Fat {
         Self::deserialize(file)
     }
 
-    pub fn serialize(&mut self, mut out: impl Write) -> Result<(), FatSerializationError> {
+    pub fn serialize(mut self, mut out: impl Write) -> Result<(), FatSerializationError> {
         let metadata = &self.metadata;
 
         let magic: u32 = metadata.fat_version.to_magic();

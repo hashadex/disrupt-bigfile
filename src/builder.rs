@@ -144,11 +144,11 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         self.add(file, relative_entry_path)
     }
 
-    pub fn write_fat(&mut self, out: impl Write) -> Result<(), FatSerializationError> {
+    pub fn write_fat(self, out: impl Write) -> Result<(), FatSerializationError> {
         self.fat.serialize(out)
     }
 
-    pub fn create_fat(&mut self, fat_path: impl AsRef<Path>) -> Result<(), FatSerializationError> {
+    pub fn create_fat(self, fat_path: impl AsRef<Path>) -> Result<(), FatSerializationError> {
         let fat_file = BufWriter::new(File::create(fat_path)?);
 
         self.write_fat(fat_file)
