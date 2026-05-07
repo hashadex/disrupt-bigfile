@@ -12,7 +12,6 @@ pub enum LZ4LWError {
         uncompressed_size: u32,
         compressed_size: u32,
     },
-    OffsetExtraByteTooLarge(u8),
     OffsetTooLarge {
         offset: usize,
         max: usize,
@@ -42,9 +41,6 @@ impl fmt::Display for LZ4LWError {
                 f,
                 "can't perform decompression if entry's compressed size ({compressed_size}) is larger than the uncompressed size ({uncompressed_size})"
             ),
-            Self::OffsetExtraByteTooLarge(extra) => {
-                write!(f, "offset extra byte (0x{extra:X}) is too large")
-            }
             Self::OffsetTooLarge { offset, max } => write!(
                 f,
                 "offset ({offset}) cannot be larger than the amount of currently decompressed bytes ({max})"
