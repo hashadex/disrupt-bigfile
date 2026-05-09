@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::compression::{lz4lw, xmemcompress};
 use crate::fat::Entry;
-use crate::metadata::CompressionScheme;
+use crate::header::CompressionScheme;
 
 pub use crate::compression::lz4lw::LZ4LWError;
 pub use crate::compression::xmemcompress::XMemCompressError;

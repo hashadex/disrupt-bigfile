@@ -45,14 +45,14 @@ impl fmt::Display for FatVersion {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
-pub enum EntryVersion {
+pub enum TableVersion {
     V7,
     V8,
     V11,
     V13,
 }
 
-impl TryFrom<u32> for EntryVersion {
+impl TryFrom<u32> for TableVersion {
     type Error = FatDeserializationError;
 
     fn try_from(version: u32) -> Result<Self, Self::Error> {
@@ -61,23 +61,23 @@ impl TryFrom<u32> for EntryVersion {
             8 => Ok(Self::V8),
             11 => Ok(Self::V11),
             13 => Ok(Self::V13),
-            _ => Err(Self::Error::UnknownEntryVersion(version)),
+            _ => Err(Self::Error::UnknownTableVersion(version)),
         }
     }
 }
 
-impl From<EntryVersion> for u32 {
-    fn from(version: EntryVersion) -> Self {
+impl From<TableVersion> for u32 {
+    fn from(version: TableVersion) -> Self {
         match version {
-            EntryVersion::V7 => 7,
-            EntryVersion::V8 => 8,
-            EntryVersion::V11 => 11,
-            EntryVersion::V13 => 13,
+            TableVersion::V7 => 7,
+            TableVersion::V8 => 8,
+            TableVersion::V11 => 11,
+            TableVersion::V13 => 13,
         }
     }
 }
 
-impl fmt::Display for EntryVersion {
+impl fmt::Display for TableVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::V7 => write!(f, "V7"),
@@ -285,9 +285,9 @@ impl fmt::Display for Dependency {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct FatMetadata {
+pub struct FatHeader {
     pub fat_version: FatVersion,
-    pub entry_version: EntryVersion,
+    pub table_version: TableVersion,
     pub platform: Platform,
     pub compression_version: CompressionVersion,
     pub name_hash_version: NameHashVersion,
@@ -295,11 +295,11 @@ pub struct FatMetadata {
     pub dependencies: Vec<Dependency>,
 }
 
-impl FatMetadata {
+impl FatHeader {
     pub const fn new_wd1_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
-            entry_version: EntryVersion::V8,
+            table_version: TableVersion::V8,
             platform: Platform::Win64,
             compression_version: CompressionVersion::V5,
             name_hash_version: NameHashVersion::V50,
@@ -311,7 +311,7 @@ impl FatMetadata {
     pub const fn new_wd1_win64_sound() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
-            entry_version: EntryVersion::V8,
+            table_version: TableVersion::V8,
             platform: Platform::Any,
             compression_version: CompressionVersion::V0,
             name_hash_version: NameHashVersion::V50,
@@ -323,7 +323,7 @@ impl FatMetadata {
     pub const fn new_wd1_wiiu() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
-            entry_version: EntryVersion::V8,
+            table_version: TableVersion::V8,
             platform: Platform::WiiU,
             compression_version: CompressionVersion::V5,
             name_hash_version: NameHashVersion::V56,
@@ -335,7 +335,7 @@ impl FatMetadata {
     pub const fn new_wd1_wiiu_sound() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
-            entry_version: EntryVersion::V8,
+            table_version: TableVersion::V8,
             platform: Platform::Any,
             compression_version: CompressionVersion::V0,
             name_hash_version: NameHashVersion::V56,
@@ -347,7 +347,7 @@ impl FatMetadata {
     pub const fn new_wd2_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
-            entry_version: EntryVersion::V11,
+            table_version: TableVersion::V11,
             platform: Platform::Win64,
             compression_version: CompressionVersion::V6,
             name_hash_version: NameHashVersion::V70,
@@ -359,7 +359,7 @@ impl FatMetadata {
     pub const fn new_wd2_ps4() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
-            entry_version: EntryVersion::V11,
+            table_version: TableVersion::V11,
             platform: Platform::Orbis,
             compression_version: CompressionVersion::V9,
             name_hash_version: NameHashVersion::V70,
@@ -371,7 +371,7 @@ impl FatMetadata {
     pub const fn new_wd2_sound() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
-            entry_version: EntryVersion::V11,
+            table_version: TableVersion::V11,
             platform: Platform::Any,
             compression_version: CompressionVersion::V0,
             name_hash_version: NameHashVersion::V70,
@@ -383,7 +383,7 @@ impl FatMetadata {
     pub const fn new_wdl_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
-            entry_version: EntryVersion::V13,
+            table_version: TableVersion::V13,
             platform: Platform::Win64,
             compression_version: CompressionVersion::V8,
             name_hash_version: NameHashVersion::V70,
@@ -395,7 +395,7 @@ impl FatMetadata {
     pub fn new_wdl_win64_london() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
-            entry_version: EntryVersion::V13,
+            table_version: TableVersion::V13,
             platform: Platform::Win64,
             compression_version: CompressionVersion::V8,
             name_hash_version: NameHashVersion::V70,
@@ -410,7 +410,7 @@ impl FatMetadata {
     pub fn new_wdl_win64_london_cache() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
-            entry_version: EntryVersion::V13,
+            table_version: TableVersion::V13,
             platform: Platform::Win64,
             compression_version: CompressionVersion::V8,
             name_hash_version: NameHashVersion::V70,
@@ -423,13 +423,13 @@ impl FatMetadata {
     }
 }
 
-impl fmt::Display for FatMetadata {
+impl fmt::Display for FatHeader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}, Entry {}, Platform {}, Compression {}, Name hash {}",
+            "{}, Table {}, Platform {}, Compression {}, Name hash {}",
             self.fat_version,
-            self.entry_version,
+            self.table_version,
             self.platform,
             self.compression_version,
             self.name_hash_version,

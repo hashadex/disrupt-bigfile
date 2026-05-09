@@ -12,9 +12,8 @@ use walkdir::WalkDir;
 use disrupt_bigfile::builder::ArchiveBuilder;
 use disrupt_bigfile::dat::Dat;
 use disrupt_bigfile::fat::Fat;
-use disrupt_bigfile::metadata::{
-    CompressionVersion, Dependency, EntryVersion, FatMetadata, FatVersion, NameHashVersion,
-    Platform,
+use disrupt_bigfile::header::{
+    CompressionVersion, Dependency, FatHeader, FatVersion, NameHashVersion, Platform, TableVersion,
 };
 
 fn existing_file_parser(source: &str) -> Result<PathBuf, io::Error> {
@@ -93,7 +92,7 @@ enum Preset {
     WdlWin64LondonCache,
 }
 
-impl From<Preset> for FatMetadata {
+impl From<Preset> for FatHeader {
     fn from(preset: Preset) -> Self {
         match preset {
             Preset::Wd1Win64 => Self::new_wd1_win64(),
@@ -164,15 +163,15 @@ enum Action {
         #[arg(long)]
         name: Option<OsString>,
 
-        /// Affects which metadata fields can be used and the layout of the FAT header
+        /// Affects which fields are present in the FAT header
         ///
         /// FAT3 is used in WD1, and FAT5 is used in WD2 and Legion.
         #[arg(short, long)]
         fat_version: Option<FatVersion>,
 
-        /// Version of the file entries inside FAT
+        /// Affects the binary layout of the FAT's contents
         #[arg(short, long)]
-        entry_version: Option<EntryVersion>,
+        table_version: Option<TableVersion>,
 
         /// Platform that the archive targets
         #[arg(short, long)]
@@ -211,9 +210,9 @@ enum Action {
         #[arg(short, long = "dependency", value_parser = dependency_parser)]
         dependencies: Option<Vec<Dependency>>,
 
-        /// Preset for FAT metadata
+        /// Preset for the FAT header
         ///
-        /// Manually specifying a metadata field using a flag such as --fat-version, --platform
+        /// Manually specifying a header field using a flag such as --fat-version, --platform
         /// will override the field from the preset.
         #[arg(short = 'P', long, default_value = "wd1-win64")]
         preset: Preset,
@@ -229,10 +228,10 @@ struct Args {
 
 fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
     let fat = Fat::open(&fat_path)?;
-    let metadata = fat.metadata;
+    let header = fat.header;
 
     if short {
-        println!("{metadata}");
+        println!("{header}");
     } else {
         println!(
             "{}\n",
@@ -242,21 +241,21 @@ fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
                 .display()
         );
 
-        println!("FAT version:         {}", metadata.fat_version);
-        println!("Entry version:       {}", metadata.entry_version);
-        println!("Platform:            {}", metadata.platform);
-        println!("Compression version: {}", metadata.compression_version);
-        println!("Name hash version:   {}", metadata.name_hash_version);
+        println!("FAT version:         {}", header.fat_version);
+        println!("Table version:       {}", header.table_version);
+        println!("Platform:            {}", header.platform);
+        println!("Compression version: {}", header.compression_version);
+        println!("Name hash version:   {}", header.name_hash_version);
         println!("Entry count:         {}", fat.entries.len());
 
-        if let Some(archive_hash) = metadata.archive_hash {
+        if let Some(archive_hash) = header.archive_hash {
             println!("Archive hash:        0x{archive_hash:X}");
         }
 
-        if !metadata.dependencies.is_empty() {
+        if !header.dependencies.is_empty() {
             println!("Dependencies:");
 
-            for dependency in metadata.dependencies {
+            for dependency in header.dependencies {
                 println!("\t-> {dependency}");
             }
         }
@@ -302,7 +301,7 @@ fn unpack(
     eprintln!("Unpacking {} entries from...", fat.entries.len());
     eprintln!("\tFAT: {}", fat_path.display());
     eprintln!("\tDAT: {}\n", dat_path.display());
-    eprintln!("FAT info: {}", fat.metadata);
+    eprintln!("FAT info: {}", fat.header);
 
     for entry in fat.entries.iter().progress() {
         dat.unpack_to_dir(*entry, &out_dir)
@@ -318,26 +317,26 @@ fn pack(
     archive_name: Option<OsString>,
     preset: Preset,
     fat_version: Option<FatVersion>,
-    entry_version: Option<EntryVersion>,
+    table_version: Option<TableVersion>,
     platform: Option<Platform>,
     compression_version: Option<CompressionVersion>,
     name_hash_version: Option<NameHashVersion>,
     archive_hash: Option<u64>,
     dependencies: Option<Vec<Dependency>>,
 ) -> Result<(), Box<dyn Error>> {
-    let preset: FatMetadata = preset.into();
+    let preset: FatHeader = preset.into();
 
     let fat_version = fat_version.unwrap_or(preset.fat_version);
-    let entry_version = entry_version.unwrap_or(preset.entry_version);
+    let table_version = table_version.unwrap_or(preset.table_version);
     let compression_version = compression_version.unwrap_or(preset.compression_version);
     let platform = platform.unwrap_or(preset.platform);
     let name_hash_version = name_hash_version.unwrap_or(preset.name_hash_version);
     let archive_hash = archive_hash.or(preset.archive_hash);
     let dependencies = dependencies.unwrap_or(preset.dependencies);
 
-    let metadata = FatMetadata {
+    let header = FatHeader {
         fat_version,
-        entry_version,
+        table_version,
         compression_version,
         platform,
         name_hash_version,
@@ -345,7 +344,7 @@ fn pack(
         dependencies,
     };
 
-    eprintln!("FAT info: {metadata}\n");
+    eprintln!("FAT info: {header}\n");
 
     let archive_name = archive_name
         .or_else(|| out_dir.file_stem().map(OsString::from))
@@ -362,7 +361,7 @@ fn pack(
     eprintln!("\tFAT: {}", fat_path.display());
     eprintln!("\tDAT: {}", dat_path.display());
 
-    let mut builder = ArchiveBuilder::create(metadata, &dat_path)?;
+    let mut builder = ArchiveBuilder::create(header, &dat_path)?;
 
     let spinner = ProgressBar::no_length().with_style(
         ProgressStyle::with_template("{spinner} Packed files: {pos}")
@@ -402,7 +401,7 @@ fn main() -> ExitCode {
             out,
             name,
             fat_version,
-            entry_version,
+            table_version,
             platform,
             compression_version,
             name_hash_version,
@@ -415,7 +414,7 @@ fn main() -> ExitCode {
             name,
             preset,
             fat_version,
-            entry_version,
+            table_version,
             platform,
             compression_version,
             name_hash_version,

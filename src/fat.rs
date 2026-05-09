@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use byteorder::{BE, LE, ReadBytesExt, WriteBytesExt};
 
-use crate::metadata::{
-    self, CompressionScheme, CompressionVersion, Dependency, EntryVersion, FatMetadata, FatVersion,
-    NameHashVersion, Platform,
+use crate::header::{
+    self, CompressionScheme, CompressionVersion, Dependency, FatHeader, FatVersion,
+    NameHashVersion, Platform, TableVersion,
 };
 use crate::name_hash_db;
 
@@ -15,7 +15,7 @@ use crate::name_hash_db;
 pub enum FatDeserializationError {
     Io(io::Error),
     BadMagic(u32),
-    UnknownEntryVersion(u32),
+    UnknownTableVersion(u32),
     UnsupportedPlatformId {
         platform_id: u8,
         fat_version: FatVersion,
@@ -43,12 +43,12 @@ impl fmt::Display for FatDeserializationError {
                 write!(
                     f,
                     "bad magic 0x{magic:X}, expected 0x{:X} or 0x{:X}",
-                    metadata::FAT3_MAGIC,
-                    metadata::FAT5_MAGIC,
+                    header::FAT3_MAGIC,
+                    header::FAT5_MAGIC,
                 )
             }
-            Self::UnknownEntryVersion(version) => {
-                write!(f, "unknown entry version {version}")
+            Self::UnknownTableVersion(version) => {
+                write!(f, "unknown table version {version}")
             }
             Self::UnsupportedPlatformId {
                 platform_id,
@@ -167,7 +167,7 @@ pub struct Entry {
 }
 
 impl Entry {
-    // Entry V7 layout
+    // V7 layout
 
     // oooooooo oooooooo oooooooo oooooooo
     // oocccccc cccccccc cccccccc cccccccc
@@ -228,7 +228,7 @@ impl Entry {
         Ok(())
     }
 
-    // Entry V8 layout
+    // V8 layout
 
     // oooooooo oooooooo oooooooo oooooooo
     // oooccccc cccccccc cccccccc cccccccc
@@ -291,7 +291,7 @@ impl Entry {
         Ok(())
     }
 
-    // Entry V11/V13 layout
+    // V11/V13 layout
 
     // uuuuuuuu uuuuuuuu uuuuuuuu uuuuuuss
     // oooooooo oooooooo oooooooo oooooooo
@@ -352,12 +352,12 @@ impl Entry {
 
     pub fn deserialize(
         mut data: impl Read,
-        entry_version: EntryVersion,
+        table_version: TableVersion,
         compression_version: CompressionVersion,
     ) -> Result<Self, FatDeserializationError> {
-        let entry_length = match entry_version {
-            EntryVersion::V7 | EntryVersion::V8 => 16,
-            EntryVersion::V11 | EntryVersion::V13 => 20,
+        let entry_length = match table_version {
+            TableVersion::V7 | TableVersion::V8 => 16,
+            TableVersion::V11 | TableVersion::V13 => 20,
         };
         let mut buf = vec![0; entry_length];
 
@@ -365,10 +365,10 @@ impl Entry {
 
         buf.reverse();
 
-        let deserializer = match entry_version {
-            EntryVersion::V7 => Self::deserialize_v7,
-            EntryVersion::V8 => Self::deserialize_v8,
-            EntryVersion::V11 | EntryVersion::V13 => Self::deserialize_v11_v13,
+        let deserializer = match table_version {
+            TableVersion::V7 => Self::deserialize_v7,
+            TableVersion::V8 => Self::deserialize_v8,
+            TableVersion::V11 | TableVersion::V13 => Self::deserialize_v11_v13,
         };
         let (name_hash, offset, compression_scheme_id, mut uncompressed_size, compressed_size) =
             deserializer(&buf)?;
@@ -395,21 +395,21 @@ impl Entry {
     pub fn serialize(
         &self,
         mut out: impl Write,
-        entry_version: EntryVersion,
+        table_version: TableVersion,
         compression_version: CompressionVersion,
     ) -> Result<(), FatSerializationError> {
-        let (max_name_hash, max_offset, max_size) = match entry_version {
-            EntryVersion::V7 => (
+        let (max_name_hash, max_offset, max_size) = match table_version {
+            TableVersion::V7 => (
                 Self::V7_MAX_NAME_HASH,
                 Self::V7_MAX_OFFSET,
                 Self::V7_MAX_SIZE,
             ),
-            EntryVersion::V8 => (
+            TableVersion::V8 => (
                 Self::V8_MAX_NAME_HASH,
                 Self::V8_MAX_OFFSET,
                 Self::V8_MAX_SIZE,
             ),
-            EntryVersion::V11 | EntryVersion::V13 => (
+            TableVersion::V11 | TableVersion::V13 => (
                 Self::V11_V13_MAX_NAME_HASH,
                 Self::V11_V13_MAX_OFFSET,
                 Self::V11_V13_MAX_SIZE,
@@ -455,10 +455,10 @@ impl Entry {
 
         let mut buf = Vec::new();
 
-        let serializer = match entry_version {
-            EntryVersion::V7 => Self::serialize_v7,
-            EntryVersion::V8 => Self::serialize_v8,
-            EntryVersion::V11 | EntryVersion::V13 => Self::serialize_v11_v13,
+        let serializer = match table_version {
+            TableVersion::V7 => Self::serialize_v7,
+            TableVersion::V8 => Self::serialize_v8,
+            TableVersion::V11 | TableVersion::V13 => Self::serialize_v11_v13,
         };
         serializer(self, &mut buf, uncompressed_size, compression_scheme_id)?;
 
@@ -492,14 +492,14 @@ impl fmt::Display for Entry {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Fat {
-    pub metadata: FatMetadata,
+    pub header: FatHeader,
     pub entries: Vec<Entry>,
 }
 
 impl Fat {
     pub fn deserialize(mut data: impl Read) -> Result<Self, FatDeserializationError> {
         let fat_version = FatVersion::try_from_magic(data.read_u32::<LE>()?)?;
-        let entry_version = EntryVersion::try_from(data.read_u32::<LE>()?)?;
+        let table_version = TableVersion::try_from(data.read_u32::<LE>()?)?;
 
         let platform = Platform::try_from_platform_id(data.read_u8()?, fat_version)?;
         let compression_version = CompressionVersion::try_from(data.read_u8()?)?;
@@ -533,14 +533,14 @@ impl Fat {
                 .expect("u32 should fit into usize on PCs"),
         );
         for _ in 0..entry_count {
-            let entry = Entry::deserialize(&mut data, entry_version, compression_version)?;
+            let entry = Entry::deserialize(&mut data, table_version, compression_version)?;
             entries.push(entry);
         }
 
         Ok(Self {
-            metadata: FatMetadata {
+            header: FatHeader {
                 fat_version,
-                entry_version,
+                table_version,
                 platform,
                 compression_version,
                 name_hash_version,
@@ -551,9 +551,9 @@ impl Fat {
         })
     }
 
-    pub fn new(metadata: FatMetadata) -> Self {
+    pub fn new(header: FatHeader) -> Self {
         Self {
-            metadata,
+            header,
             entries: Vec::new(),
         }
     }
@@ -564,33 +564,33 @@ impl Fat {
     }
 
     pub fn serialize(mut self, mut out: impl Write) -> Result<(), FatSerializationError> {
-        let metadata = &self.metadata;
+        let header = &self.header;
 
-        let magic: u32 = metadata.fat_version.to_magic();
+        let magic: u32 = header.fat_version.to_magic();
         out.write_u32::<LE>(magic)?;
 
-        out.write_u32::<LE>(metadata.entry_version.into())?;
+        out.write_u32::<LE>(header.table_version.into())?;
 
         // Flags
-        out.write_u8(metadata.platform.try_to_platform_id(metadata.fat_version)?)?;
-        out.write_u8(metadata.compression_version.into())?;
-        out.write_u8(metadata.name_hash_version.into())?;
+        out.write_u8(header.platform.try_to_platform_id(header.fat_version)?)?;
+        out.write_u8(header.compression_version.into())?;
+        out.write_u8(header.name_hash_version.into())?;
         out.write_u8(0x00)?;
 
-        if metadata.fat_version == FatVersion::Fat5 {
+        if header.fat_version == FatVersion::Fat5 {
             out.write_u64::<LE>(
-                metadata
+                header
                     .archive_hash
                     .ok_or(FatSerializationError::MissingArchiveHash)?,
             )?;
 
-            let dependency_count = metadata.dependencies.len();
+            let dependency_count = header.dependencies.len();
             let dependency_count: u32 = dependency_count
                 .try_into()
                 .map_err(|_| FatSerializationError::DependencyCountWontFit(dependency_count))?;
             out.write_u32::<LE>(dependency_count)?;
 
-            for dependency in &metadata.dependencies {
+            for dependency in &header.dependencies {
                 dependency.serialize(&mut out)?;
             }
         }
@@ -605,15 +605,11 @@ impl Fat {
 
         entries.sort_unstable_by_key(|entry| entry.name_hash);
         for entry in entries {
-            entry.serialize(
-                &mut out,
-                metadata.entry_version,
-                metadata.compression_version,
-            )?;
+            entry.serialize(&mut out, header.table_version, header.compression_version)?;
         }
 
         // Duplicate count
-        if metadata.entry_version == EntryVersion::V13 {
+        if header.table_version == TableVersion::V13 {
             out.write_u32::<LE>(0)?;
         }
 

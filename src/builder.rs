@@ -4,7 +4,7 @@ use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use crate::fat::{Entry, Fat, FatSerializationError};
-use crate::metadata::{CompressionScheme, FatMetadata, FatVersion};
+use crate::header::{CompressionScheme, FatHeader, FatVersion};
 
 #[derive(Debug)]
 pub enum PackError {
@@ -47,10 +47,10 @@ pub struct ArchiveBuilder<W: Write + Seek> {
 }
 
 impl<W: Write + Seek> ArchiveBuilder<W> {
-    pub fn new(fat_metadata: FatMetadata, mut dat: W) -> Result<Self, io::Error> {
+    pub fn new(fat_header: FatHeader, mut dat: W) -> Result<Self, io::Error> {
         let dat_position = dat.stream_position()?;
 
-        let fat = Fat::new(fat_metadata);
+        let fat = Fat::new(fat_header);
 
         Ok(ArchiveBuilder {
             fat,
@@ -86,14 +86,14 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
                 hash ^= u64::from(byte);
             }
 
-            if self.fat.metadata.fat_version == FatVersion::Fat5 {
+            if self.fat.header.fat_version == FatVersion::Fat5 {
                 // The three highest bits in all FAT5 name hashes seem to be always set to 101.
                 hash &= 0x1FFF_FFFF_FFFF_FFFF; // 0b0001_1111...
                 hash |= 0xA000_0000_0000_0000; // 0b1010_0000...
             }
         }
 
-        if self.fat.metadata.fat_version == FatVersion::Fat3 {
+        if self.fat.header.fat_version == FatVersion::Fat3 {
             hash &= 0xFFFF_FFFF;
         }
 
@@ -156,12 +156,9 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
 }
 
 impl ArchiveBuilder<File> {
-    pub fn create(
-        fat_metadata: FatMetadata,
-        dat_path: impl AsRef<Path>,
-    ) -> Result<Self, io::Error> {
+    pub fn create(fat_header: FatHeader, dat_path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let dat = File::create(dat_path)?;
 
-        Self::new(fat_metadata, dat)
+        Self::new(fat_header, dat)
     }
 }
