@@ -3,7 +3,7 @@ use std::{cmp, fmt};
 
 use byteorder::{LE, ReadBytesExt};
 
-use crate::fat::Entry;
+use crate::entry::Entry;
 
 #[derive(Debug)]
 pub enum LZ4LWError {

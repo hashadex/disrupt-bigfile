@@ -3,8 +3,9 @@ use std::fs::File;
 use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-use crate::fat::{Entry, Fat, FatSerializationError};
-use crate::header::{CompressionScheme, FatHeader, FatVersion};
+use crate::entry::{CompressionScheme, Entry};
+use crate::fat::{Fat, FatSerializationError};
+use crate::header::{FatHeader, FatVersion};
 
 #[derive(Debug)]
 pub enum PackError {

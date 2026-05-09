@@ -4,8 +4,7 @@ use std::io::{self, BufReader, Read, Seek, SeekFrom, Take, Write};
 use std::path::Path;
 
 use crate::compression::{lz4lw, xmemcompress};
-use crate::fat::Entry;
-use crate::header::CompressionScheme;
+use crate::entry::{CompressionScheme, Entry};
 
 pub use crate::compression::lz4lw::LZ4LWError;
 pub use crate::compression::xmemcompress::XMemCompressError;
