@@ -4,7 +4,7 @@ use std::io::{self, Read, Write};
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 use clap::ValueEnum;
 
-use crate::fat::{FatDeserializationError, FatSerializationError};
+use crate::fat::{FatConstructionError, FatDeserializationError};
 
 pub const FAT3_MAGIC: u32 = 0x4641_5433;
 pub const FAT5_MAGIC: u32 = 0x4641_5435;
@@ -119,7 +119,7 @@ impl Platform {
         }
     }
 
-    pub fn try_to_platform_id(self, fat_version: FatVersion) -> Result<u8, FatSerializationError> {
+    pub fn try_to_platform_id(self, fat_version: FatVersion) -> Result<u8, FatConstructionError> {
         match (fat_version, self) {
             (_, Self::Any) => Ok(0),
             (FatVersion::Fat3, Self::Win32) | (FatVersion::Fat5, Self::Win64) => Ok(1),
@@ -127,11 +127,15 @@ impl Platform {
             (FatVersion::Fat3, Self::Ps3) | (FatVersion::Fat5, Self::Orbis) => Ok(3),
             (FatVersion::Fat3, Self::Win64) => Ok(4),
             (FatVersion::Fat3, Self::WiiU) => Ok(8),
-            _ => Err(FatSerializationError::UnsupportedPlatform {
+            _ => Err(FatConstructionError::UnsupportedPlatform {
                 platform: self,
                 fat_version,
             }),
         }
+    }
+
+    pub fn is_supported_for(self, fat_version: FatVersion) -> bool {
+        self.try_to_platform_id(fat_version).is_ok()
     }
 }
 
@@ -286,16 +290,168 @@ impl fmt::Display for Dependency {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct FatHeader {
-    pub fat_version: FatVersion,
-    pub table_version: TableVersion,
-    pub platform: Platform,
-    pub compression_version: CompressionVersion,
-    pub name_hash_version: NameHashVersion,
-    pub archive_hash: Option<u64>,
-    pub dependencies: Vec<Dependency>,
+    fat_version: FatVersion,
+    table_version: TableVersion,
+    platform: Platform,
+    compression_version: CompressionVersion,
+    name_hash_version: NameHashVersion,
+    archive_hash: Option<u64>,
+    dependencies: Option<Vec<Dependency>>,
 }
 
 impl FatHeader {
+    pub fn new_fat3(
+        table_version: TableVersion,
+        platform: Platform,
+        compression_version: CompressionVersion,
+        name_hash_version: NameHashVersion,
+    ) -> Self {
+        Self {
+            fat_version: FatVersion::Fat3,
+            table_version,
+            platform,
+            compression_version,
+            name_hash_version,
+            archive_hash: None,
+            dependencies: None,
+        }
+    }
+
+    pub fn new_fat5(
+        table_version: TableVersion,
+        platform: Platform,
+        compression_version: CompressionVersion,
+        name_hash_version: NameHashVersion,
+        archive_hash: u64,
+        dependencies: Vec<Dependency>,
+    ) -> Result<Self, FatConstructionError> {
+        if !platform.is_supported_for(FatVersion::Fat5) {
+            return Err(FatConstructionError::UnsupportedPlatform {
+                platform,
+                fat_version: FatVersion::Fat5,
+            });
+        }
+
+        u32::try_from(dependencies.len())
+            .map_err(|_| FatConstructionError::DependencyCountWontFit(dependencies.len()))?;
+
+        Ok(Self {
+            fat_version: FatVersion::Fat5,
+            table_version,
+            platform,
+            compression_version,
+            name_hash_version,
+            archive_hash: Some(archive_hash),
+            dependencies: Some(dependencies),
+        })
+    }
+
+    pub fn deserialize(mut data: impl Read) -> Result<Self, FatDeserializationError> {
+        let fat_version = FatVersion::try_from_magic(data.read_u32::<LE>()?)?;
+        let table_version = TableVersion::try_from(data.read_u32::<LE>()?)?;
+
+        let platform = Platform::try_from_platform_id(data.read_u8()?, fat_version)?;
+        let compression_version = CompressionVersion::try_from(data.read_u8()?)?;
+        let name_hash_version = NameHashVersion::try_from(data.read_u8()?)?;
+        let padding_byte = data.read_u8()?;
+        if padding_byte != 0x00 {
+            return Err(FatDeserializationError::UnexpectedPaddingByte(padding_byte));
+        }
+
+        let (archive_hash, dependencies) = match fat_version {
+            FatVersion::Fat3 => (None, None),
+            FatVersion::Fat5 => {
+                let archive_hash = data.read_u64::<LE>()?;
+
+                let dependency_count: usize = data
+                    .read_u32::<LE>()?
+                    .try_into()
+                    .expect("u32 should fit into usize on PCs");
+                let mut dependencies = Vec::with_capacity(dependency_count);
+
+                for _ in 0..dependency_count {
+                    let dependency = Dependency::deserialize(&mut data)?;
+                    dependencies.push(dependency);
+                }
+
+                (Some(archive_hash), Some(dependencies))
+            }
+        };
+
+        Ok(Self {
+            fat_version,
+            table_version,
+            platform,
+            compression_version,
+            name_hash_version,
+            archive_hash,
+            dependencies,
+        })
+    }
+
+    pub fn serialize(&self, mut out: impl Write) -> Result<(), io::Error> {
+        out.write_u32::<LE>(self.fat_version.to_magic())?;
+        out.write_u32::<LE>(self.table_version.into())?;
+
+        // Flags
+        out.write_u8(self.platform.try_to_platform_id(self.fat_version).expect(
+            "constructor should guarantee that platform is supported by current fat version",
+        ))?;
+        out.write_u8(self.compression_version.into())?;
+        out.write_u8(self.name_hash_version.into())?;
+        out.write_u8(0x00)?;
+
+        if self.fat_version == FatVersion::Fat5 {
+            out.write_u64::<LE>(
+                self.archive_hash
+                    .expect("constructor should guarantee that archive hash is present on FAT5"),
+            )?;
+
+            let dependencies = self
+                .dependencies()
+                .expect("constructor should guarantee that dependencies are present on FAT5");
+            let dependency_count: u32 = dependencies
+                .len()
+                .try_into()
+                .expect("constructor should guarantee that dependency count fits into u32");
+
+            out.write_u32::<LE>(dependency_count)?;
+            for dependency in dependencies {
+                dependency.serialize(&mut out)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn fat_version(&self) -> FatVersion {
+        self.fat_version
+    }
+
+    pub fn table_version(&self) -> TableVersion {
+        self.table_version
+    }
+
+    pub fn platform(&self) -> Platform {
+        self.platform
+    }
+
+    pub fn compression_version(&self) -> CompressionVersion {
+        self.compression_version
+    }
+
+    pub fn name_hash_version(&self) -> NameHashVersion {
+        self.name_hash_version
+    }
+
+    pub fn archive_hash(&self) -> Option<u64> {
+        self.archive_hash
+    }
+
+    pub fn dependencies(&self) -> Option<&[Dependency]> {
+        self.dependencies.as_deref()
+    }
+
     pub const fn new_wd1_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
@@ -304,7 +460,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V5,
             name_hash_version: NameHashVersion::V50,
             archive_hash: None,
-            dependencies: vec![],
+            dependencies: None,
         }
     }
 
@@ -316,7 +472,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V0,
             name_hash_version: NameHashVersion::V50,
             archive_hash: None,
-            dependencies: vec![],
+            dependencies: None,
         }
     }
 
@@ -328,7 +484,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V5,
             name_hash_version: NameHashVersion::V56,
             archive_hash: None,
-            dependencies: vec![],
+            dependencies: None,
         }
     }
 
@@ -340,7 +496,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V0,
             name_hash_version: NameHashVersion::V56,
             archive_hash: None,
-            dependencies: vec![],
+            dependencies: None,
         }
     }
 
@@ -352,7 +508,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V6,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
-            dependencies: vec![],
+            dependencies: Some(vec![]),
         }
     }
 
@@ -364,7 +520,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V9,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
-            dependencies: vec![],
+            dependencies: Some(vec![]),
         }
     }
 
@@ -376,7 +532,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V0,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
-            dependencies: vec![],
+            dependencies: Some(vec![]),
         }
     }
 
@@ -388,7 +544,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V8,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
-            dependencies: vec![],
+            dependencies: Some(vec![]),
         }
     }
 
@@ -400,10 +556,10 @@ impl FatHeader {
             compression_version: CompressionVersion::V8,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xA7E2_977F_3F32_B98E),
-            dependencies: vec![Dependency {
+            dependencies: Some(vec![Dependency {
                 archive_hash: 0xB782_28C0_B350_CC14,
                 name_hash: 0xBE38_E2B5_954E_5FA4,
-            }],
+            }]),
         }
     }
 
@@ -415,10 +571,10 @@ impl FatHeader {
             compression_version: CompressionVersion::V8,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xB782_28C0_B350_CC14),
-            dependencies: vec![Dependency {
+            dependencies: Some(vec![Dependency {
                 archive_hash: 0xA7E2_977F_3F32_B98E,
                 name_hash: 0xB058_64FD_230C_EA67,
-            }],
+            }]),
         }
     }
 }
@@ -435,14 +591,17 @@ impl fmt::Display for FatHeader {
             self.name_hash_version,
         )?;
 
-        if let Some(archive_hash) = self.archive_hash {
-            write!(f, ", Archive hash 0x{archive_hash:X}")?;
-        }
+        if self.fat_version == FatVersion::Fat5 {
+            let archive_hash = self
+                .archive_hash
+                .expect("constructor should guarantee that archive hash is present on FAT5");
+            let dependencies = self
+                .dependencies()
+                .expect("constructor should guarantee that dependencies are present on FAT5");
 
-        if !self.dependencies.is_empty() {
-            write!(f, ", Dependencies [")?;
+            write!(f, ", Archive hash 0x{archive_hash:X}, Dependencies [")?;
 
-            for (index, dependency) in self.dependencies.iter().enumerate() {
+            for (index, dependency) in dependencies.iter().enumerate() {
                 if index != 0 {
                     write!(f, ", ")?;
                 }

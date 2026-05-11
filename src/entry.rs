@@ -4,9 +4,71 @@ use std::path::PathBuf;
 
 use byteorder::{BE, ReadBytesExt, WriteBytesExt};
 
-use crate::fat::{FatDeserializationError, FatSerializationError};
+use crate::fat::FatDeserializationError;
 use crate::header::{CompressionVersion, TableVersion};
 use crate::name_hash_db;
+
+#[derive(Debug)]
+pub enum EntryError {
+    Io(io::Error),
+    NameHashWontFit {
+        hash: u64,
+        max: u64,
+    },
+    OffsetWontFit {
+        offset: u64,
+        max: u64,
+    },
+    UnsupportedCompressionScheme {
+        scheme: CompressionScheme,
+        compression_version: CompressionVersion,
+    },
+    UncompressedSizeWontFit {
+        size: u32,
+        max: u32,
+    },
+    CompressedSizeWontFit {
+        size: u32,
+        max: u32,
+    },
+}
+
+impl From<io::Error> for EntryError {
+    fn from(err: io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+impl fmt::Display for EntryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "io error: {err}"),
+            Self::NameHashWontFit { hash, max } => write!(
+                f,
+                "name hash 0x{hash:X} is too large for current table version (expected 0x{max:X} max)"
+            ),
+            Self::OffsetWontFit { offset, max } => write!(
+                f,
+                "offset 0x{offset:X} is too large for current table version (expected 0x{max:X} max)"
+            ),
+            Self::UnsupportedCompressionScheme {
+                scheme,
+                compression_version,
+            } => write!(
+                f,
+                "compression scheme {scheme} is not supported by compression version {compression_version}"
+            ),
+            Self::UncompressedSizeWontFit { size, max } => write!(
+                f,
+                "uncompressed size {size} is too large for current table version (expected {max} max)"
+            ),
+            Self::CompressedSizeWontFit { size, max } => write!(
+                f,
+                "compressed size {size} is too large for current table version (expected {max} max)"
+            ),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CompressionScheme {
@@ -60,7 +122,7 @@ impl CompressionScheme {
     pub fn try_to_scheme_id(
         self,
         compression_version: CompressionVersion,
-    ) -> Result<u8, FatSerializationError> {
+    ) -> Result<u8, EntryError> {
         match (self, compression_version) {
             (Self::None, _) => Ok(0),
 
@@ -75,11 +137,15 @@ impl CompressionScheme {
             (Self::XMemCompress, CompressionVersion::V5)
             | (Self::LZ4LW, CompressionVersion::V8 | CompressionVersion::V9) => Ok(3),
 
-            _ => Err(FatSerializationError::UnsupportedCompressionScheme {
+            _ => Err(EntryError::UnsupportedCompressionScheme {
                 scheme: self,
                 compression_version,
             }),
         }
+    }
+
+    pub fn is_supported_for(self, compression_version: CompressionVersion) -> bool {
+        self.try_to_scheme_id(compression_version).is_ok()
     }
 }
 
@@ -318,12 +384,11 @@ impl Entry {
         })
     }
 
-    pub fn serialize(
+    pub fn validate(
         &self,
-        mut out: impl Write,
         table_version: TableVersion,
         compression_version: CompressionVersion,
-    ) -> Result<(), FatSerializationError> {
+    ) -> Result<(), EntryError> {
         let (max_name_hash, max_offset, max_size) = match table_version {
             TableVersion::V7 => (
                 Self::V7_MAX_NAME_HASH,
@@ -343,32 +408,52 @@ impl Entry {
         };
 
         if self.name_hash > max_name_hash {
-            return Err(FatSerializationError::NameHashWontFit {
-                name_hash: self.name_hash,
+            return Err(EntryError::NameHashWontFit {
+                hash: self.name_hash,
                 max: max_name_hash,
             });
         }
 
         if self.offset > max_offset {
-            return Err(FatSerializationError::OffsetWontFit {
+            return Err(EntryError::OffsetWontFit {
                 offset: self.offset,
                 max: max_offset,
             });
         }
 
+        if !self
+            .compression_scheme
+            .is_supported_for(compression_version)
+        {
+            return Err(EntryError::UnsupportedCompressionScheme {
+                scheme: self.compression_scheme,
+                compression_version,
+            });
+        }
+
         if self.uncompressed_size > max_size {
-            return Err(FatSerializationError::SizeWontFit {
+            return Err(EntryError::UncompressedSizeWontFit {
                 size: self.uncompressed_size,
                 max: max_size,
             });
         }
+
         if self.compressed_size > max_size {
-            return Err(FatSerializationError::SizeWontFit {
+            return Err(EntryError::CompressedSizeWontFit {
                 size: self.compressed_size,
                 max: max_size,
             });
         }
 
+        Ok(())
+    }
+
+    pub fn serialize_unchecked(
+        &self,
+        mut out: impl Write,
+        table_version: TableVersion,
+        compression_version: CompressionVersion,
+    ) -> Result<(), io::Error> {
         // See comment in deserialize()
         let uncompressed_size = if self.compression_scheme == CompressionScheme::None {
             0
@@ -377,7 +462,8 @@ impl Entry {
         };
         let compression_scheme_id = self
             .compression_scheme
-            .try_to_scheme_id(compression_version)?;
+            .try_to_scheme_id(compression_version)
+            .expect("validate() should guarantee that compression scheme is supported by current compression version");
 
         let mut buf = Vec::new();
 
@@ -393,6 +479,17 @@ impl Entry {
         out.write_all(&buf)?;
 
         Ok(())
+    }
+
+    pub fn serialize(
+        &self,
+        out: impl Write,
+        table_version: TableVersion,
+        compression_version: CompressionVersion,
+    ) -> Result<(), EntryError> {
+        self.validate(table_version, compression_version)?;
+        self.serialize_unchecked(out, table_version, compression_version)
+            .map_err(EntryError::from)
     }
 
     pub fn path(&self) -> PathBuf {

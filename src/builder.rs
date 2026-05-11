@@ -3,13 +3,15 @@ use std::fs::File;
 use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-use crate::entry::{CompressionScheme, Entry};
-use crate::fat::{Fat, FatSerializationError};
+use crate::entry::{CompressionScheme, Entry, EntryError};
+use crate::fat::Fat;
 use crate::header::{FatHeader, FatVersion};
 
 #[derive(Debug)]
 pub enum PackError {
     Io(io::Error),
+    Entry(EntryError),
+    TableIsFull,
     FileTooLarge(u64),
     CantParseUnknownFileHash(PathBuf),
 }
@@ -20,13 +22,21 @@ impl From<io::Error> for PackError {
     }
 }
 
+impl From<EntryError> for PackError {
+    fn from(err: EntryError) -> Self {
+        Self::Entry(err)
+    }
+}
+
 impl fmt::Display for PackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(f, "io error: {err}"),
+            Self::Entry(err) => write!(f, "entry error: {err}"),
+            Self::TableIsFull => write!(f, "can't add more than {} entries", u32::MAX),
             Self::FileTooLarge(size) => write!(
                 f,
-                "can't add file because its size is too large to fit into an Entry struct (expected {} max, got {size})",
+                "can't add file because its size is too large to fit into an Entry struct on any table version (expected {} max, got {size})",
                 u32::MAX
             ),
             Self::CantParseUnknownFileHash(path) => write!(
@@ -41,7 +51,8 @@ impl fmt::Display for PackError {
 impl std::error::Error for PackError {}
 
 pub struct ArchiveBuilder<W: Write + Seek> {
-    fat: Fat,
+    fat_header: FatHeader,
+    entries: Vec<Entry>,
     dat: W,
     dat_position: u64,
     last_add_failed: bool,
@@ -51,18 +62,17 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
     pub fn new(fat_header: FatHeader, mut dat: W) -> Result<Self, io::Error> {
         let dat_position = dat.stream_position()?;
 
-        let fat = Fat::new(fat_header);
-
         Ok(ArchiveBuilder {
-            fat,
+            fat_header,
+            entries: vec![],
             dat,
             dat_position,
             last_add_failed: false,
         })
     }
 
-    pub fn into_inner(self) -> (Fat, W) {
-        (self.fat, self.dat)
+    pub fn into_inner(self) -> (FatHeader, Vec<Entry>, W) {
+        (self.fat_header, self.entries, self.dat)
     }
 
     fn compute_name_hash(&self, relative_entry_path: impl AsRef<Path>) -> Result<u64, PackError> {
@@ -87,14 +97,14 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
                 hash ^= u64::from(byte);
             }
 
-            if self.fat.header.fat_version == FatVersion::Fat5 {
+            if self.fat_header.fat_version() == FatVersion::Fat5 {
                 // The three highest bits in all FAT5 name hashes seem to be always set to 101.
                 hash &= 0x1FFF_FFFF_FFFF_FFFF; // 0b0001_1111...
                 hash |= 0xA000_0000_0000_0000; // 0b1010_0000...
             }
         }
 
-        if self.fat.header.fat_version == FatVersion::Fat3 {
+        if self.fat_header.fat_version() == FatVersion::Fat3 {
             hash &= 0xFFFF_FFFF;
         }
 
@@ -106,6 +116,15 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         mut data: impl Read,
         relative_entry_path: impl AsRef<Path>,
     ) -> Result<(), PackError> {
+        let entry_count: u32 = self
+            .entries
+            .len()
+            .try_into()
+            .expect("add() should guarantee that entries.len() <= u32::MAX");
+        if entry_count == u32::MAX {
+            return Err(PackError::TableIsFull);
+        }
+
         // If the last add failed, dat_position might not accurately reflect dat's actual position.
         // Let's fix this by rewinding dat to the position after the last successful add() call.
         if self.last_add_failed {
@@ -127,7 +146,12 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
             uncompressed_size: copied,
             compressed_size: copied,
         };
-        self.fat.entries.push(entry);
+        entry.validate(
+            self.fat_header.table_version(),
+            self.fat_header.compression_version(),
+        )?;
+
+        self.entries.push(entry);
 
         self.dat_position += u64::from(copied);
 
@@ -145,14 +169,18 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         self.add(file, relative_entry_path)
     }
 
-    pub fn write_fat(self, out: impl Write) -> Result<(), FatSerializationError> {
-        self.fat.serialize(out)
+    pub fn into_fat(self) -> Fat {
+        Fat::new_unchecked(self.fat_header, self.entries)
     }
 
-    pub fn create_fat(self, fat_path: impl AsRef<Path>) -> Result<(), FatSerializationError> {
-        let fat_file = BufWriter::new(File::create(fat_path)?);
+    pub fn write_fat(self, out: impl Write) -> Result<(), io::Error> {
+        let fat = self.into_fat();
+        fat.serialize(out)
+    }
 
-        self.write_fat(fat_file)
+    pub fn create_fat(self, path: impl AsRef<Path>) -> Result<(), io::Error> {
+        let file = BufWriter::new(File::create(path)?);
+        self.write_fat(file)
     }
 }
 

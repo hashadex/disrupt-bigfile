@@ -228,7 +228,7 @@ struct Args {
 
 fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
     let fat = Fat::open(&fat_path)?;
-    let header = fat.header;
+    let header = fat.header();
 
     if short {
         println!("{header}");
@@ -241,21 +241,25 @@ fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
                 .display()
         );
 
-        println!("FAT version:         {}", header.fat_version);
-        println!("Table version:       {}", header.table_version);
-        println!("Platform:            {}", header.platform);
-        println!("Compression version: {}", header.compression_version);
-        println!("Name hash version:   {}", header.name_hash_version);
-        println!("Entry count:         {}", fat.entries.len());
+        println!("FAT version:         {}", header.fat_version());
+        println!("Table version:       {}", header.table_version());
+        println!("Platform:            {}", header.platform());
+        println!("Compression version: {}", header.compression_version());
+        println!("Name hash version:   {}", header.name_hash_version());
+        println!("Entry count:         {}", fat.entries().len());
 
-        if let Some(archive_hash) = header.archive_hash {
+        if header.fat_version() == FatVersion::Fat5 {
+            let archive_hash = header
+                .archive_hash()
+                .expect("archive hash should be always present on FAT5");
+            let dependencies = header
+                .dependencies()
+                .expect("dependencies should be always present on FAT5");
+
             println!("Archive hash:        0x{archive_hash:X}");
-        }
 
-        if !header.dependencies.is_empty() {
             println!("Dependencies:");
-
-            for dependency in header.dependencies {
+            for dependency in dependencies {
                 println!("\t-> {dependency}");
             }
         }
@@ -268,7 +272,7 @@ fn list(fat_path: PathBuf, verbose: bool) -> Result<(), Box<dyn Error>> {
     let fat = Fat::open(fat_path)?;
 
     let mut lock = io::stdout().lock();
-    for entry in fat.entries {
+    for entry in fat.entries() {
         if verbose {
             writeln!(lock, "{entry}")?;
         } else {
@@ -298,12 +302,12 @@ fn unpack(
     let fat = Fat::open(&fat_path)?;
     let mut dat = Dat::open(&dat_path)?;
 
-    eprintln!("Unpacking {} entries from...", fat.entries.len());
+    eprintln!("Unpacking {} entries from...", fat.entries().len());
     eprintln!("\tFAT: {}", fat_path.display());
     eprintln!("\tDAT: {}\n", dat_path.display());
-    eprintln!("FAT info: {}", fat.header);
+    eprintln!("FAT info: {}", fat.header());
 
-    for entry in fat.entries.iter().progress() {
+    for entry in fat.entries().iter().progress() {
         dat.unpack_to_dir(*entry, &out_dir)
             .map_err(|err| format!("failed to unpack {}: {err}", entry.path().display()))?;
     }
@@ -326,22 +330,45 @@ fn pack(
 ) -> Result<(), Box<dyn Error>> {
     let preset: FatHeader = preset.into();
 
-    let fat_version = fat_version.unwrap_or(preset.fat_version);
-    let table_version = table_version.unwrap_or(preset.table_version);
-    let compression_version = compression_version.unwrap_or(preset.compression_version);
-    let platform = platform.unwrap_or(preset.platform);
-    let name_hash_version = name_hash_version.unwrap_or(preset.name_hash_version);
-    let archive_hash = archive_hash.or(preset.archive_hash);
-    let dependencies = dependencies.unwrap_or(preset.dependencies);
+    let fat_version = fat_version.unwrap_or(preset.fat_version());
+    let table_version = table_version.unwrap_or(preset.table_version());
+    let compression_version = compression_version.unwrap_or(preset.compression_version());
+    let platform = platform.unwrap_or(preset.platform());
+    let name_hash_version = name_hash_version.unwrap_or(preset.name_hash_version());
 
-    let header = FatHeader {
-        fat_version,
-        table_version,
-        compression_version,
-        platform,
-        name_hash_version,
-        archive_hash,
-        dependencies,
+    let archive_hash = archive_hash.or(preset.archive_hash());
+    let dependencies = dependencies.or_else(|| preset.dependencies().map(Vec::from));
+
+    let header = match fat_version {
+        FatVersion::Fat3 => {
+            if archive_hash.is_some() {
+                eprintln!("Warning: ignoring archive hash as it is not supported for FAT3");
+            }
+            if dependencies.is_some() {
+                eprintln!("Warning: ignoring dependencies as they are not supported for FAT3");
+            }
+
+            FatHeader::new_fat3(
+                table_version,
+                platform,
+                compression_version,
+                name_hash_version,
+            )
+        }
+        FatVersion::Fat5 => {
+            let archive_hash =
+                archive_hash.ok_or("archive hash is required for FAT5, but it is missing")?;
+            let dependencies = dependencies.unwrap_or(vec![]);
+
+            FatHeader::new_fat5(
+                table_version,
+                platform,
+                compression_version,
+                name_hash_version,
+                archive_hash,
+                dependencies,
+            )?
+        }
     };
 
     eprintln!("FAT info: {header}\n");
