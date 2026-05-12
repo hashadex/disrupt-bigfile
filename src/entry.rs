@@ -489,7 +489,7 @@ impl Entry {
     ) -> Result<(), EntryError> {
         self.validate(table_version, compression_version)?
             .serialize_unchecked(out, table_version, compression_version)
-            .map_err(EntryError::from) // TODO: .map_err(EntryError::Io) for consistency?
+            .map_err(EntryError::Io)
     }
 
     pub fn path(self) -> PathBuf {
