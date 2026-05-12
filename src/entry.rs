@@ -385,10 +385,10 @@ impl Entry {
     }
 
     pub fn validate(
-        &self,
+        self,
         table_version: TableVersion,
         compression_version: CompressionVersion,
-    ) -> Result<(), EntryError> {
+    ) -> Result<Self, EntryError> {
         let (max_name_hash, max_offset, max_size) = match table_version {
             TableVersion::V7 => (
                 Self::V7_MAX_NAME_HASH,
@@ -445,7 +445,7 @@ impl Entry {
             });
         }
 
-        Ok(())
+        Ok(self)
     }
 
     pub fn serialize_unchecked(
@@ -487,9 +487,9 @@ impl Entry {
         table_version: TableVersion,
         compression_version: CompressionVersion,
     ) -> Result<(), EntryError> {
-        self.validate(table_version, compression_version)?;
-        self.serialize_unchecked(out, table_version, compression_version)
-            .map_err(EntryError::from)
+        self.validate(table_version, compression_version)?
+            .serialize_unchecked(out, table_version, compression_version)
+            .map_err(EntryError::from) // TODO: .map_err(EntryError::Io) for consistency?
     }
 
     pub fn path(&self) -> PathBuf {

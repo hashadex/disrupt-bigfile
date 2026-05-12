@@ -145,8 +145,8 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
             compression_scheme: CompressionScheme::None,
             uncompressed_size: copied,
             compressed_size: copied,
-        };
-        entry.validate(
+        }
+        .validate(
             self.fat_header.table_version(),
             self.fat_header.compression_version(),
         )?;
