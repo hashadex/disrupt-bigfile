@@ -24,6 +24,18 @@ impl From<io::Error> for UnpackError {
     }
 }
 
+impl From<LZ4LWError> for UnpackError {
+    fn from(err: LZ4LWError) -> Self {
+        Self::LZ4LW(err)
+    }
+}
+
+impl From<XMemCompressError> for UnpackError {
+    fn from(err: XMemCompressError) -> Self {
+        Self::XMemCompress(err)
+    }
+}
+
 impl fmt::Display for UnpackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
