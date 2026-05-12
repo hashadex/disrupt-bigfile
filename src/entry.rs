@@ -199,7 +199,7 @@ impl Entry {
     }
 
     fn serialize_v7(
-        &self,
+        self,
         buf: &mut Vec<u8>,
         uncompressed_size: u32,
         compression_scheme_id: u8,
@@ -262,7 +262,7 @@ impl Entry {
     }
 
     fn serialize_v8(
-        &self,
+        self,
         buf: &mut Vec<u8>,
         uncompressed_size: u32,
         compression_scheme_id: u8,
@@ -324,7 +324,7 @@ impl Entry {
     }
 
     fn serialize_v11_v13(
-        &self,
+        self,
         buf: &mut Vec<u8>,
         uncompressed_size: u32,
         compression_scheme_id: u8,
@@ -449,7 +449,7 @@ impl Entry {
     }
 
     pub fn serialize_unchecked(
-        &self,
+        self,
         mut out: impl Write,
         table_version: TableVersion,
         compression_version: CompressionVersion,
@@ -482,7 +482,7 @@ impl Entry {
     }
 
     pub fn serialize(
-        &self,
+        self,
         out: impl Write,
         table_version: TableVersion,
         compression_version: CompressionVersion,
@@ -492,7 +492,7 @@ impl Entry {
             .map_err(EntryError::from) // TODO: .map_err(EntryError::Io) for consistency?
     }
 
-    pub fn path(&self) -> PathBuf {
+    pub fn path(self) -> PathBuf {
         name_hash_db::get(self.name_hash).map_or_else(
             || format!("__UNKNOWN/{:X}", self.name_hash).into(),
             PathBuf::from,
