@@ -125,9 +125,7 @@ pub struct Fat {
 }
 
 impl Fat {
-    pub fn new_unchecked(header: FatHeader, entries: impl Into<Vec<Entry>>) -> Self {
-        let mut entries: Vec<Entry> = entries.into();
-
+    pub fn new_unchecked(header: FatHeader, mut entries: Vec<Entry>) -> Self {
         let extract_name_hash = |entry: &Entry| entry.name_hash;
         if !entries.is_sorted_by_key(extract_name_hash) {
             entries.sort_unstable_by_key(extract_name_hash);
@@ -136,12 +134,7 @@ impl Fat {
         Self { header, entries }
     }
 
-    pub fn new(
-        header: FatHeader,
-        entries: impl Into<Vec<Entry>>,
-    ) -> Result<Self, FatConstructionError> {
-        let entries: Vec<Entry> = entries.into();
-
+    pub fn new(header: FatHeader, entries: Vec<Entry>) -> Result<Self, FatConstructionError> {
         let entry_count = entries.len();
         u32::try_from(entry_count)
             .map_err(|_| FatConstructionError::EntryCountWontFit(entry_count))?;
