@@ -12,7 +12,6 @@ pub enum PackError {
     Io(io::Error),
     Entry(EntryError),
     TableIsFull,
-    FileTooLarge(u64),
     CantParseUnknownFileHash(PathBuf),
 }
 
@@ -34,11 +33,6 @@ impl fmt::Display for PackError {
             Self::Io(err) => write!(f, "io error: {err}"),
             Self::Entry(err) => write!(f, "entry error: {err}"),
             Self::TableIsFull => write!(f, "can't add more than {} entries", u32::MAX),
-            Self::FileTooLarge(size) => write!(
-                f,
-                "can't add file because its size is too large to fit into an Entry struct on any table version (expected {} max, got {size})",
-                u32::MAX
-            ),
             Self::CantParseUnknownFileHash(path) => write!(
                 f,
                 "can't parse name hash from unknown file path {}",
@@ -132,13 +126,9 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
             self.last_add_failed = false;
         }
 
-        let copied = io::copy(&mut data, &mut self.dat)
-            .map_err(PackError::Io)
-            .and_then(|copied| u32::try_from(copied).map_err(|_| PackError::FileTooLarge(copied)))
-            .inspect_err(|_| self.last_add_failed = true)?;
+        let copied = io::copy(&mut data, &mut self.dat)?;
 
         let name_hash = self.compute_name_hash(relative_entry_path)?;
-
         let entry = Entry {
             name_hash,
             offset: self.dat_position,
@@ -153,7 +143,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
 
         self.entries.push(entry);
 
-        self.dat_position += u64::from(copied);
+        self.dat_position += copied;
 
         Ok(())
     }

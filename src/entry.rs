@@ -24,12 +24,12 @@ pub enum EntryError {
         compression_version: CompressionVersion,
     },
     UncompressedSizeWontFit {
-        size: u32,
-        max: u32,
+        size: u64,
+        max: u64,
     },
     CompressedSizeWontFit {
-        size: u32,
-        max: u32,
+        size: u64,
+        max: u64,
     },
 }
 
@@ -154,8 +154,8 @@ pub struct Entry {
     pub name_hash: u64,
     pub offset: u64,
     pub compression_scheme: CompressionScheme,
-    pub uncompressed_size: u32,
-    pub compressed_size: u32,
+    pub uncompressed_size: u64,
+    pub compressed_size: u64,
 }
 
 impl Entry {
@@ -174,18 +174,16 @@ impl Entry {
 
     const V7_MAX_NAME_HASH: u64 = u32::MAX as u64;
     const V7_MAX_OFFSET: u64 = 2u64.pow(34);
-    const V7_MAX_SIZE: u32 = 2u32.pow(30);
+    const V7_MAX_SIZE: u64 = 2u64.pow(30);
 
-    fn deserialize_v7(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u32, u32), io::Error> {
+    fn deserialize_v7(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u64, u64), io::Error> {
         let a = entry_bytes.read_u64::<BE>()?;
         let b = entry_bytes.read_u32::<BE>()?;
         let c = entry_bytes.read_u32::<BE>()?;
 
         let offset = a >> 30;
-        let compressed_size = (a & 0x3FFF_FFFF)
-            .try_into()
-            .expect("30 bit int should fit into u32");
-        let uncompressed_size = b >> 2;
+        let compressed_size = a & 0x3FFF_FFFF;
+        let uncompressed_size = (b >> 2).into();
         let compression_scheme_id = (b & 0b11).try_into().expect("2 bit int should fit into u8");
         let name_hash = c.into();
 
@@ -201,17 +199,22 @@ impl Entry {
     fn serialize_v7(
         self,
         buf: &mut Vec<u8>,
-        uncompressed_size: u32,
+        uncompressed_size: u64,
         compression_scheme_id: u8,
     ) -> Result<(), io::Error> {
         buf.reserve(16);
 
-        let a = (self.offset << 30) | u64::from(self.compressed_size);
-        let b = (uncompressed_size << 2) | u32::from(compression_scheme_id);
-        let c = self
+        let name_hash: u32 = self
             .name_hash
             .try_into()
             .expect("validate() should guarantee that name_hash fits into u32");
+        let uncompressed_size: u32 = uncompressed_size
+            .try_into()
+            .expect("validate() should guarantee uncompressed_size fits into u32");
+
+        let a = (self.offset << 30) | self.compressed_size;
+        let b = (uncompressed_size << 2) | u32::from(compression_scheme_id);
+        let c = name_hash;
 
         buf.write_u64::<BE>(a)?;
         buf.write_u32::<BE>(b)?;
@@ -235,22 +238,20 @@ impl Entry {
 
     const V8_MAX_NAME_HASH: u64 = u32::MAX as u64;
     const V8_MAX_OFFSET: u64 = 2u64.pow(35);
-    const V8_MAX_SIZE: u32 = 2u32.pow(29);
+    const V8_MAX_SIZE: u64 = 2u64.pow(29);
 
-    fn deserialize_v8(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u32, u32), io::Error> {
+    fn deserialize_v8(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u64, u64), io::Error> {
         let a = entry_bytes.read_u64::<BE>()?;
         let b = entry_bytes.read_u32::<BE>()?;
         let c = entry_bytes.read_u32::<BE>()?;
 
         let offset = a >> 29;
-        let compressed_size = (a & 0x1FFF_FFFF)
-            .try_into()
-            .expect("29 bit int should fit into u32");
-        let uncompressed_size = b >> 3;
+        let compressed_size = a & 0x1FFF_FFFF;
+        let uncompressed_size = (b >> 3).into();
         let compression_scheme_id = (b & 0b111)
             .try_into()
             .expect("3 bit int should fit into u8");
-        let name_hash: u64 = c.into();
+        let name_hash = c.into();
 
         Ok((
             name_hash,
@@ -264,17 +265,22 @@ impl Entry {
     fn serialize_v8(
         self,
         buf: &mut Vec<u8>,
-        uncompressed_size: u32,
+        uncompressed_size: u64,
         compression_scheme_id: u8,
     ) -> Result<(), io::Error> {
         buf.reserve(16);
 
-        let a = (self.offset << 29) | u64::from(self.compressed_size);
-        let b = (uncompressed_size << 3) | u32::from(compression_scheme_id);
-        let c: u32 = self
+        let name_hash: u32 = self
             .name_hash
             .try_into()
             .expect("validate() should guarantee that name_hash fits into u32");
+        let uncompressed_size: u32 = uncompressed_size
+            .try_into()
+            .expect("validate() should guarantee uncompressed_size fits into u32");
+
+        let a = (self.offset << 29) | self.compressed_size;
+        let b = (uncompressed_size << 3) | u32::from(compression_scheme_id);
+        let c = name_hash;
 
         buf.write_u64::<BE>(a)?;
         buf.write_u32::<BE>(b)?;
@@ -299,19 +305,17 @@ impl Entry {
 
     const V11_V13_MAX_NAME_HASH: u64 = u64::MAX;
     const V11_V13_MAX_OFFSET: u64 = 2u64.pow(34);
-    const V11_V13_MAX_SIZE: u32 = 2u32.pow(30);
+    const V11_V13_MAX_SIZE: u64 = 2u64.pow(30);
 
-    fn deserialize_v11_v13(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u32, u32), io::Error> {
+    fn deserialize_v11_v13(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u64, u64), io::Error> {
         let a = entry_bytes.read_u32::<BE>()?;
         let b = entry_bytes.read_u64::<BE>()?;
         let c = entry_bytes.read_u64::<BE>()?;
 
-        let uncompressed_size = a >> 2;
+        let uncompressed_size = (a >> 2).into();
         let compression_scheme_id = (a & 0b11).try_into().expect("2 bit int should fit into u8");
         let offset = b >> 30;
-        let compressed_size = (b & 0x3FFF_FFFF)
-            .try_into()
-            .expect("30 bit int should fit into u32");
+        let compressed_size = b & 0x3FFF_FFFF;
         let name_hash = c;
 
         Ok((
@@ -326,13 +330,17 @@ impl Entry {
     fn serialize_v11_v13(
         self,
         buf: &mut Vec<u8>,
-        uncompressed_size: u32,
+        uncompressed_size: u64,
         compression_scheme_id: u8,
     ) -> Result<(), io::Error> {
         buf.reserve(20);
 
+        let uncompressed_size: u32 = uncompressed_size
+            .try_into()
+            .expect("validate() should guarantee uncompressed_size fits into u32");
+
         let a = (uncompressed_size << 2) | u32::from(compression_scheme_id);
-        let b = (self.offset << 30) | u64::from(self.compressed_size);
+        let b = (self.offset << 30) | self.compressed_size;
         let c = self.name_hash;
 
         buf.write_u32::<BE>(a)?;

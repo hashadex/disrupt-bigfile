@@ -13,7 +13,7 @@ pub use crate::compression::xmemcompress::XMemCompressError;
 #[derive(Debug)]
 pub enum UnpackError {
     Io(io::Error),
-    SizeMismatch { expected: u32, actual: u64 },
+    SizeMismatch { expected: u64, actual: u64 },
     LZ4LW(LZ4LWError),
     XMemCompress(XMemCompressError),
 }
@@ -67,7 +67,7 @@ impl<R: Read + Seek> Dat<R> {
 
     pub fn raw_entry_data(&mut self, entry: Entry) -> Result<Take<&mut R>, io::Error> {
         self.inner.seek(SeekFrom::Start(entry.offset))?;
-        Ok((&mut self.inner).take(entry.compressed_size.into()))
+        Ok((&mut self.inner).take(entry.compressed_size))
     }
 
     pub fn write_decompressed(
@@ -90,7 +90,7 @@ impl<R: Read + Seek> Dat<R> {
             CompressionScheme::Oodle => todo!(),
         }?;
 
-        if decompressed == u64::from(entry.uncompressed_size) {
+        if decompressed == entry.uncompressed_size {
             Ok(())
         } else {
             Err(UnpackError::SizeMismatch {

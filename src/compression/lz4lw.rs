@@ -9,8 +9,8 @@ use crate::entry::Entry;
 pub enum LZ4LWError {
     Io(io::Error),
     InvalidEntry {
-        uncompressed_size: u32,
-        compressed_size: u32,
+        uncompressed_size: u64,
+        compressed_size: u64,
     },
     OffsetTooLarge {
         offset: usize,
@@ -79,10 +79,10 @@ pub fn decompress_lz4lw(
         });
     }
 
-    let mut out_buf = Vec::with_capacity(entry.uncompressed_size as usize);
-
-    let uncompressed_size: u64 = entry.uncompressed_size.into();
-    let compressed_size: u64 = entry.compressed_size.into();
+    let mut out_buf = vec![];
+    if let Ok(uncompressed_size) = entry.uncompressed_size.try_into() {
+        out_buf.reserve(uncompressed_size);
+    }
 
     // The first few bytes in a LZ4LW compressed file are a header. The header is 1-4 bytes long.
     // If the highest bit of a header byte is 1, this means that the next byte is also part of the
@@ -109,7 +109,7 @@ pub fn decompress_lz4lw(
 
     // The position at which the compressed bytes would be written to if we used in-place
     // decompression.
-    let in_place_margin = uncompressed_size - compressed_size;
+    let in_place_margin = entry.uncompressed_size - entry.compressed_size;
 
     while (out_buf.len() as u64) < in_place_margin + input.stream_position()? {
         // The rest of the decompression process is identical to regular LZ4 with the exception
