@@ -211,7 +211,7 @@ impl Entry {
         let c = self
             .name_hash
             .try_into()
-            .expect("serialize() should guarantee that name_hash fits into u32");
+            .expect("validate() should guarantee that name_hash fits into u32");
 
         buf.write_u64::<BE>(a)?;
         buf.write_u32::<BE>(b)?;
@@ -274,7 +274,7 @@ impl Entry {
         let c: u32 = self
             .name_hash
             .try_into()
-            .expect("serialize() should guarantee that name_hash fits into u32");
+            .expect("validate() should guarantee that name_hash fits into u32");
 
         buf.write_u64::<BE>(a)?;
         buf.write_u32::<BE>(b)?;
