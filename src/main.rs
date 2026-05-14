@@ -409,7 +409,7 @@ fn pack(
         spinner.inc(1);
     }
 
-    builder.create_fat(fat_path)?;
+    builder.finish()?.create(fat_path)?;
 
     spinner.finish_and_clear();
 

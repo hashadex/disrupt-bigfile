@@ -1,6 +1,6 @@
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufReader, Read, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
@@ -204,6 +204,11 @@ impl Fat {
         out.flush()?;
 
         Ok(())
+    }
+
+    pub fn create(&self, path: impl AsRef<Path>) -> Result<(), io::Error> {
+        let mut file = BufWriter::new(File::create(path)?);
+        self.serialize(&mut file).and_then(|_| file.flush())
     }
 
     pub fn header(&self) -> &FatHeader {

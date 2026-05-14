@@ -1,6 +1,6 @@
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use crate::entry::{CompressionScheme, Entry, EntryError};
@@ -159,18 +159,10 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         self.add(file, relative_entry_path)
     }
 
-    pub fn into_fat(self) -> Fat {
-        Fat::new_unchecked(self.fat_header, self.entries)
-    }
+    pub fn finish(mut self) -> Result<Fat, io::Error> {
+        self.dat.flush()?;
 
-    pub fn write_fat(self, out: impl Write) -> Result<(), io::Error> {
-        let fat = self.into_fat();
-        fat.serialize(out)
-    }
-
-    pub fn create_fat(self, path: impl AsRef<Path>) -> Result<(), io::Error> {
-        let file = BufWriter::new(File::create(path)?);
-        self.write_fat(file)
+        Ok(Fat::new_unchecked(self.fat_header, self.entries))
     }
 }
 
