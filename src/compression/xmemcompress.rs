@@ -201,7 +201,5 @@ pub fn decompress_xmemcompress(
             u64::try_from(decompressed_chunk_buf.len()).expect("usize should fit into u64 on PCs");
     }
 
-    out.flush()?;
-
     Ok(decompressed)
 }

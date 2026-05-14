@@ -81,14 +81,18 @@ impl<R: Read + Seek> Dat<R> {
             CompressionScheme::None => io::copy(&mut raw_data, &mut out).map_err(UnpackError::Io),
             CompressionScheme::LZO1x => todo!(),
             CompressionScheme::Zlib => todo!(),
-            CompressionScheme::XMemCompress => xmemcompress::decompress_xmemcompress(raw_data, out)
-                .map_err(UnpackError::XMemCompress),
+            CompressionScheme::XMemCompress => {
+                xmemcompress::decompress_xmemcompress(raw_data, &mut out)
+                    .map_err(UnpackError::XMemCompress)
+            }
             CompressionScheme::LZMA => todo!(),
             CompressionScheme::LZ4LW => {
-                lz4lw::decompress_lz4lw(raw_data, out, entry).map_err(UnpackError::LZ4LW)
+                lz4lw::decompress_lz4lw(raw_data, &mut out, entry).map_err(UnpackError::LZ4LW)
             }
             CompressionScheme::Oodle => todo!(),
         }?;
+
+        out.flush()?;
 
         if decompressed == entry.uncompressed_size {
             Ok(())
