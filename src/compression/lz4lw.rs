@@ -156,8 +156,8 @@ pub fn decompress_lz4lw(
         }
     }
 
-    let overwritten: i64 = (out_buf.len() as u64 - (in_place_margin + input.stream_position()?))
-        .try_into()
+    let overwritten = (out_buf.len() as u64)
+        .checked_signed_diff(in_place_margin + input.stream_position()?)
         .expect("it's extremely unlikely we have overwritten > 8 EiB");
     input.seek_relative(overwritten)?;
     io::copy(&mut input, &mut out_buf)?;
