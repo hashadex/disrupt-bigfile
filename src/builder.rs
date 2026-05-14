@@ -65,10 +65,6 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         })
     }
 
-    pub fn into_inner(self) -> (FatHeader, Vec<Entry>, W) {
-        (self.fat_header, self.entries, self.dat)
-    }
-
     fn compute_name_hash(&self, relative_entry_path: impl AsRef<Path>) -> Result<u64, PackError> {
         let path = relative_entry_path.as_ref();
 
