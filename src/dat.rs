@@ -70,7 +70,6 @@ impl<R: Read + Seek> Dat<R> {
             .offset
             .checked_signed_diff(self.inner.stream_position()?)
         {
-            debug_assert!(relative_seek_position == 0);
             self.inner.seek_relative(relative_seek_position)?;
         } else {
             self.inner.seek(SeekFrom::Start(entry.offset))?;
