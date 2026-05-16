@@ -66,7 +66,16 @@ impl<R: Read + Seek> Dat<R> {
     }
 
     pub fn raw_entry_data(&mut self, entry: Entry) -> Result<Take<&mut R>, io::Error> {
-        self.inner.seek(SeekFrom::Start(entry.offset))?;
+        if let Some(relative_seek_position) = entry
+            .offset
+            .checked_signed_diff(self.inner.stream_position()?)
+        {
+            debug_assert!(relative_seek_position == 0);
+            self.inner.seek_relative(relative_seek_position)?;
+        } else {
+            self.inner.seek(SeekFrom::Start(entry.offset))?;
+        }
+
         Ok((&mut self.inner).take(entry.compressed_size))
     }
 
@@ -125,6 +134,20 @@ impl<R: Read + Seek> Dat<R> {
         fs::create_dir_all(dest_dir)?;
 
         self.unpack_to_file(entry, dest)
+    }
+
+    pub fn bulk_unpack_to_dir(
+        &mut self,
+        mut entries: Vec<Entry>,
+        archive_root_dir: impl AsRef<Path>,
+    ) -> impl ExactSizeIterator<Item = (Entry, Result<(), UnpackError>)> {
+        // Unpacking entries in offset order minimizes the amount of seek operations and can give a
+        // performance increase as large as 20% in archives with a huge amount of entries.
+        entries.sort_unstable_by_key(|entry| entry.offset);
+
+        entries
+            .into_iter()
+            .map(move |entry| (entry, self.unpack_to_dir(entry, &archive_root_dir)))
     }
 }
 

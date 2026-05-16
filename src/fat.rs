@@ -211,6 +211,10 @@ impl Fat {
         self.serialize(&mut file).and_then(|_| file.flush())
     }
 
+    pub fn into_inner(self) -> (FatHeader, Vec<Entry>) {
+        (self.header, self.entries)
+    }
+
     pub fn header(&self) -> &FatHeader {
         &self.header
     }

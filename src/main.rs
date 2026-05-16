@@ -307,9 +307,9 @@ fn unpack(
     eprintln!("\tDAT: {}\n", dat_path.display());
     eprintln!("FAT info: {}", fat.header());
 
-    for entry in fat.entries().iter().progress() {
-        dat.unpack_to_dir(*entry, &out_dir)
-            .map_err(|err| format!("failed to unpack {}: {err}", entry.path().display()))?;
+    let (_, entries) = fat.into_inner();
+    for (entry, result) in dat.bulk_unpack_to_dir(entries, out_dir).progress() {
+        result.map_err(|err| format!("failed to unpack {}: {err}", entry.path().display()))?;
     }
 
     Ok(())
