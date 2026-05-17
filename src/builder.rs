@@ -49,7 +49,7 @@ pub struct ArchiveBuilder<W: Write + Seek> {
     entries: Vec<Entry>,
     dat: W,
     dat_position: u64,
-    last_add_failed: bool,
+    last_write_failed: bool,
 }
 
 impl<W: Write + Seek> ArchiveBuilder<W> {
@@ -61,7 +61,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
             entries: vec![],
             dat,
             dat_position,
-            last_add_failed: false,
+            last_write_failed: false,
         })
     }
 
@@ -115,19 +115,24 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
             return Err(PackError::TableIsFull);
         }
 
-        // If the last add failed, dat_position might not accurately reflect dat's actual position.
-        // Let's fix this by rewinding dat to the position after the last successful add() call.
-        if self.last_add_failed {
+        // If the last write failed, dat_position might not accurately reflect dat's actual
+        // position. Let's fix this by rewinding dat to the position after the last successful
+        // add() call.
+        if self.last_write_failed {
             self.dat.seek(SeekFrom::Start(self.dat_position))?;
-            self.last_add_failed = false;
+            self.last_write_failed = false;
         }
 
-        let copied = io::copy(&mut data, &mut self.dat)?;
-
         let name_hash = self.compute_name_hash(relative_entry_path)?;
+        let offset = self.dat_position;
+
+        let copied =
+            io::copy(&mut data, &mut self.dat).inspect_err(|_| self.last_write_failed = true)?;
+        self.dat_position += copied;
+
         let entry = Entry {
             name_hash,
-            offset: self.dat_position,
+            offset,
             compression_scheme: CompressionScheme::None,
             uncompressed_size: copied,
             compressed_size: copied,
@@ -138,8 +143,6 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         )?;
 
         self.entries.push(entry);
-
-        self.dat_position += copied;
 
         Ok(())
     }
