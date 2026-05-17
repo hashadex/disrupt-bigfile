@@ -262,7 +262,7 @@ fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
             if dependencies.is_empty() {
                 println!("None");
             } else {
-                print!("\n");
+                println!();
                 for dependency in dependencies {
                     println!("\t-> {dependency}");
                 }
