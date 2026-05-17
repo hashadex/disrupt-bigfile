@@ -208,7 +208,7 @@ impl Fat {
 
     pub fn create(&self, path: impl AsRef<Path>) -> Result<(), io::Error> {
         let mut file = BufWriter::new(File::create(path)?);
-        self.serialize(&mut file).and_then(|_| file.flush())
+        self.serialize(&mut file).and_then(|()| file.flush())
     }
 
     pub fn into_inner(self) -> (FatHeader, Vec<Entry>) {
