@@ -258,9 +258,14 @@ fn info(fat_path: PathBuf, short: bool) -> Result<(), Box<dyn Error>> {
 
             println!("Archive hash:        0x{archive_hash:X}");
 
-            println!("Dependencies:");
-            for dependency in dependencies {
-                println!("\t-> {dependency}");
+            print!("Dependencies:        ");
+            if dependencies.is_empty() {
+                println!("None");
+            } else {
+                print!("\n");
+                for dependency in dependencies {
+                    println!("\t-> {dependency}");
+                }
             }
         }
     }
