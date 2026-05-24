@@ -91,9 +91,7 @@ pub fn decompress_lz4lw(
     // The information inside the header does not seem to affect decompression and therefore can be
     // skipped.
     for _ in 0..4 {
-        let header_byte = input.read_u8()?;
-
-        if header_byte >> 7 == 0 {
+        if input.read_u8()? >> 7 == 0 {
             break;
         }
     }
