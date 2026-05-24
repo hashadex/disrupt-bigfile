@@ -1,5 +1,6 @@
+use std::cmp;
+use std::fmt;
 use std::io::{self, Read, Seek, Write};
-use std::{cmp, fmt};
 
 use byteorder::{LE, ReadBytesExt};
 
