@@ -161,7 +161,7 @@ pub fn decompress_lz4lw(
     input.seek_relative(overwritten)?;
     io::copy(&mut input, &mut out_buf)?;
 
-    let copied = io::copy(&mut out_buf.as_slice(), &mut out)?;
+    let decompressed = io::copy(&mut out_buf.as_slice(), &mut out)?;
 
-    Ok(copied)
+    Ok(decompressed)
 }
