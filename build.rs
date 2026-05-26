@@ -195,7 +195,7 @@ fn main() -> Result<(), String> {
 
         let fat3_hash = filelist_path.starts_with("wd1");
 
-        let filelist_path: PathBuf = ["filelists", filelist_path].iter().collect();
+        let filelist_path = Path::new("filelists").join(filelist_path);
         let filelist_file = BufReader::new(File::open(&filelist_path).map_err(|err| format!("failed to open filelist {}: {err}; make sure you have cloned the repo with submodules", filelist_path.display()))?);
 
         for filename in filelist_file.lines() {
