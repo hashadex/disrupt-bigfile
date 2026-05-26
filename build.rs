@@ -197,7 +197,7 @@ fn main() -> Result<(), String> {
 
         let filelist_file = BufReader::new(File::open(&filelist_path).map_err(|err| {
             format!(
-                "failed to open filelist {filelist_path}: {err}; make sure you have cloned the repo with submodules",
+                "failed to open filelist {filelist_path}: {err}; make sure you have cloned the repo with submodules"
             )
         })?);
 
@@ -239,7 +239,7 @@ fn main() -> Result<(), String> {
             }
         }
 
-        println!("read {new_filenames_count} new filenames from {filelist_path}",);
+        println!("read {new_filenames_count} new filenames from {filelist_path}");
     }
 
     println!(
