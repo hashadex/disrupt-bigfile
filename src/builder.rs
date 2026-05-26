@@ -58,7 +58,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
 
         Ok(ArchiveBuilder {
             fat_header,
-            entries: vec![],
+            entries: Vec::new(),
             dat,
             dat_position,
             last_write_failed: false,

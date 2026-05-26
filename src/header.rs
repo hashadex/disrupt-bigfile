@@ -508,7 +508,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V6,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
-            dependencies: Some(vec![]),
+            dependencies: Some(Vec::new()),
         }
     }
 
@@ -520,7 +520,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V9,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
-            dependencies: Some(vec![]),
+            dependencies: Some(Vec::new()),
         }
     }
 
@@ -532,7 +532,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V0,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
-            dependencies: Some(vec![]),
+            dependencies: Some(Vec::new()),
         }
     }
 
@@ -544,7 +544,7 @@ impl FatHeader {
             compression_version: CompressionVersion::V8,
             name_hash_version: NameHashVersion::V70,
             archive_hash: Some(0xFFFF_FFFF_FFFF_FFFF),
-            dependencies: Some(vec![]),
+            dependencies: Some(Vec::new()),
         }
     }
 

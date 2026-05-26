@@ -80,7 +80,7 @@ pub fn decompress_lz4lw(
         });
     }
 
-    let mut out_buf = vec![];
+    let mut out_buf = Vec::new();
     if let Ok(uncompressed_size) = entry.uncompressed_size.try_into() {
         out_buf.reserve(uncompressed_size);
     }

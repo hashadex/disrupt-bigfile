@@ -363,7 +363,7 @@ fn pack(
         FatVersion::Fat5 => {
             let archive_hash =
                 archive_hash.ok_or("archive hash is required for FAT5, but it is missing")?;
-            let dependencies = dependencies.unwrap_or(vec![]);
+            let dependencies = dependencies.unwrap_or(Vec::new());
 
             FatHeader::new_fat5(
                 table_version,
