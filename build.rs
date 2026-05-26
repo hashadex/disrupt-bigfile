@@ -1,7 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 use std::{env, fs};
 
@@ -201,15 +201,14 @@ fn main() -> Result<(), String> {
             )
         })?);
 
-        for filename in filelist_file.lines() {
-            let filename = filename.map_err(|err| {
-                format!("failed to read all filenames from {filelist_path}: {err}",)
-            })?;
+        let filenames = filelist_file
+            .lines()
+            .collect::<io::Result<Vec<_>>>()
+            .map_err(|err| format!("failed to read all filenames from {filelist_path}: {err}"))?
+            .into_iter()
+            .filter(|filename| !filename.starts_with(';'));
 
-            if filename.starts_with(';') {
-                continue;
-            }
-
+        for filename in filenames {
             let mut name_hash = fnv1_hash(filename.as_bytes());
             if fat3_hash {
                 name_hash &= 0xFFFF_FFFF;
