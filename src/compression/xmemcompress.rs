@@ -15,7 +15,7 @@ const XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE: u32 = 32768;
 
 #[derive(Debug)]
 pub enum XMemCompressError {
-    IoError(io::Error),
+    Io(io::Error),
     BadMagic(u32),
     UnknownVersion(u16),
     UnexpectedReserved(u16),
@@ -28,22 +28,22 @@ pub enum XMemCompressError {
         size: u32,
     },
     CompressedChunkBufferAllocationFailed(u32),
-    LzxdError {
+    Lzxd {
         chunk_num: u64,
         err: lzxd::DecompressError,
     },
 }
 
 impl From<io::Error> for XMemCompressError {
-    fn from(io_error: io::Error) -> Self {
-        Self::IoError(io_error)
+    fn from(err: io::Error) -> Self {
+        Self::Io(err)
     }
 }
 
 impl fmt::Display for XMemCompressError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::IoError(error) => write!(f, "io error: {error}"),
+            Self::Io(error) => write!(f, "io error: {error}"),
             Self::BadMagic(magic) => write!(
                 f,
                 "bad magic 0x{magic:X} in compressed file's header, expected 0x{XMEMCOMPRESS_LZXNATIVE_SIGNATURE:X}"
@@ -78,7 +78,7 @@ impl fmt::Display for XMemCompressError {
                 f,
                 "failed to allocate compressed chunk buffer of {size} bytes"
             ),
-            Self::LzxdError { chunk_num, err } => {
+            Self::Lzxd { chunk_num, err } => {
                 write!(f, "lzxd error on chunk #{chunk_num}: {err}")
             }
         }
@@ -201,7 +201,7 @@ pub fn decompress_xmemcompress(
         let mut lzxd_context = Lzxd::new(window_size);
         let decompressed_chunk_buf = lzxd_context
             .decompress_next(&compressed_chunk_buf, uncompressed_chunk_size.into())
-            .map_err(|err| XMemCompressError::LzxdError { chunk_num, err })?;
+            .map_err(|err| XMemCompressError::Lzxd { chunk_num, err })?;
 
         out.write_all(decompressed_chunk_buf)?;
         decompressed +=
