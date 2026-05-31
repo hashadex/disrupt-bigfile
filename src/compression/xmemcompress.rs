@@ -4,6 +4,8 @@ use std::io::{self, Read, Seek, Write};
 use byteorder::{BE, ReadBytesExt};
 use lzxd::{self, Lzxd, WindowSize};
 
+use crate::vec;
+
 const XMEMCOMPRESS_LZXNATIVE_SIGNATURE: u32 = 0x0FF5_12EE;
 const XMEMCOMPRESS_VERSION: u16 = 0x0103;
 const XMEMCOMPRESS_RESERVED: u16 = 0x0;
@@ -25,6 +27,7 @@ pub enum XMemCompressError {
         chunk_num: u64,
         size: u32,
     },
+    CompressedChunkBufferAllocationFailed(u32),
     LzxdError {
         chunk_num: u64,
         err: lzxd::DecompressError,
@@ -71,6 +74,10 @@ impl fmt::Display for XMemCompressError {
             Self::InvalidChunkSize { chunk_num, size } => {
                 write!(f, "chunk #{chunk_num} has an invalid size of {size}")
             }
+            Self::CompressedChunkBufferAllocationFailed(size) => write!(
+                f,
+                "failed to allocate compressed chunk buffer of {size} bytes"
+            ),
             Self::LzxdError { chunk_num, err } => {
                 write!(f, "lzxd error on chunk #{chunk_num}: {err}")
             }
@@ -161,7 +168,7 @@ pub fn decompress_xmemcompress(
         // We will ignore the size from the internal header to keep the reader aligned to "external"
         // chunks.
 
-        let chunk_size = input.read_u32::<BE>()?;
+        let mut compressed_chunk_size = input.read_u32::<BE>()?;
 
         let uncompressed_chunk_size;
         let internal_header_size;
@@ -177,15 +184,15 @@ pub fn decompress_xmemcompress(
             input.seek_relative(1)?;
         }
 
-        let chunk_buf_size: usize = chunk_size
+        compressed_chunk_size = compressed_chunk_size
             .checked_sub(internal_header_size)
             .ok_or(XMemCompressError::InvalidChunkSize {
                 chunk_num,
-                size: chunk_size,
-            })?
-            .try_into()
-            .expect("u32 should fit into usize on PCs");
-        let mut compressed_chunk_buf = vec![0; chunk_buf_size];
+                size: compressed_chunk_size,
+            })?;
+        let mut compressed_chunk_buf = vec::try_with_elements(compressed_chunk_size).ok_or(
+            XMemCompressError::CompressedChunkBufferAllocationFailed(compressed_chunk_size),
+        )?;
 
         input.read_exact(&mut compressed_chunk_buf)?;
 

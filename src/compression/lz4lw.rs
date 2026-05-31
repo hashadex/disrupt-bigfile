@@ -5,6 +5,7 @@ use std::io::{self, Read, Seek, Write};
 use byteorder::{LE, ReadBytesExt};
 
 use crate::entry::Entry;
+use crate::vec;
 
 #[derive(Debug)]
 pub enum LZ4LWError {
@@ -13,6 +14,7 @@ pub enum LZ4LWError {
         uncompressed_size: u64,
         compressed_size: u64,
     },
+    OutputBufferAllocationFailed(u64),
     OffsetTooLarge {
         offset: usize,
         max: usize,
@@ -42,6 +44,9 @@ impl fmt::Display for LZ4LWError {
                 f,
                 "can't perform decompression if entry's compressed size ({compressed_size}) is larger than the uncompressed size ({uncompressed_size})"
             ),
+            Self::OutputBufferAllocationFailed(size) => {
+                write!(f, "failed to allocate output buffer of {size} bytes")
+            }
             Self::OffsetTooLarge { offset, max } => write!(
                 f,
                 "offset ({offset}) cannot be larger than the amount of currently decompressed bytes ({max})"
@@ -80,10 +85,9 @@ pub fn decompress_lz4lw(
         });
     }
 
-    let mut out_buf = Vec::new();
-    if let Ok(uncompressed_size) = entry.uncompressed_size.try_into() {
-        out_buf.reserve(uncompressed_size);
-    }
+    let mut out_buf = vec::try_with_capacity(entry.uncompressed_size).ok_or(
+        LZ4LWError::OutputBufferAllocationFailed(entry.uncompressed_size),
+    )?;
 
     // The first few bytes in a LZ4LW compressed file are a header. The header is 1-4 bytes long.
     // If the highest bit of a header byte is 1, this means that the next byte is also part of the

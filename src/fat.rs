@@ -7,6 +7,7 @@ use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 
 use crate::entry::{Entry, EntryError};
 use crate::header::{self, CompressionVersion, FatHeader, FatVersion, Platform, TableVersion};
+use crate::vec;
 
 #[derive(Debug)]
 pub enum FatDeserializationError {
@@ -20,6 +21,8 @@ pub enum FatDeserializationError {
     UnknownCompressionVersion(u8),
     UnknownNameHashVersion(u8),
     UnexpectedPaddingByte(u8),
+    DependencyAllocationFailed(u32),
+    EntryAllocationFailed(u32),
     UnknownCompressionScheme {
         scheme_id: u8,
         compression_version: CompressionVersion,
@@ -62,6 +65,15 @@ impl fmt::Display for FatDeserializationError {
             }
             Self::UnexpectedPaddingByte(byte) => {
                 write!(f, "unexpected padding byte 0x{byte:X}, expected 0x00")
+            }
+            Self::DependencyAllocationFailed(dependencies) => {
+                write!(
+                    f,
+                    "failed to allocate memory for {dependencies} dependencies"
+                )
+            }
+            Self::EntryAllocationFailed(entries) => {
+                write!(f, "failed to allocate memory for {entries} entries")
             }
             Self::UnknownCompressionScheme {
                 scheme_id,
@@ -151,11 +163,9 @@ impl Fat {
     pub fn deserialize(mut data: impl Read) -> Result<Self, FatDeserializationError> {
         let header = FatHeader::deserialize(&mut data)?;
 
-        let entry_count: usize = data
-            .read_u32::<LE>()?
-            .try_into()
-            .expect("u32 should fit into usize on PCs");
-        let mut entries = Vec::with_capacity(entry_count);
+        let entry_count = data.read_u32::<LE>()?;
+        let mut entries = vec::try_with_capacity(entry_count)
+            .ok_or(FatDeserializationError::EntryAllocationFailed(entry_count))?;
         for _ in 0..entry_count {
             let entry = Entry::deserialize(
                 &mut data,

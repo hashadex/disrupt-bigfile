@@ -5,6 +5,7 @@ use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 use clap::ValueEnum;
 
 use crate::fat::{FatConstructionError, FatDeserializationError};
+use crate::vec;
 
 pub const FAT3_MAGIC: u32 = 0x4641_5433;
 pub const FAT5_MAGIC: u32 = 0x4641_5435;
@@ -363,11 +364,10 @@ impl FatHeader {
             FatVersion::Fat5 => {
                 let archive_hash = data.read_u64::<LE>()?;
 
-                let dependency_count: usize = data
-                    .read_u32::<LE>()?
-                    .try_into()
-                    .expect("u32 should fit into usize on PCs");
-                let mut dependencies = Vec::with_capacity(dependency_count);
+                let dependency_count = data.read_u32::<LE>()?;
+                let mut dependencies = vec::try_with_capacity(dependency_count).ok_or(
+                    FatDeserializationError::DependencyAllocationFailed(dependency_count),
+                )?;
 
                 for _ in 0..dependency_count {
                     let dependency = Dependency::deserialize(&mut data)?;
