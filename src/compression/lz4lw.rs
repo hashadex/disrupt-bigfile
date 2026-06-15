@@ -8,7 +8,7 @@ use crate::entry::Entry;
 use crate::vec;
 
 #[derive(Debug)]
-pub enum LZ4LWError {
+pub enum Error {
     Io(io::Error),
     InvalidEntry {
         uncompressed_size: u64,
@@ -21,19 +21,19 @@ pub enum LZ4LWError {
     },
 }
 
-impl From<io::Error> for LZ4LWError {
+impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
         Self::Io(err)
     }
 }
 
-impl From<io::ErrorKind> for LZ4LWError {
+impl From<io::ErrorKind> for Error {
     fn from(kind: io::ErrorKind) -> Self {
         Self::Io(kind.into())
     }
 }
 
-impl fmt::Display for LZ4LWError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(f, "io error: {err}"),
@@ -55,7 +55,7 @@ impl fmt::Display for LZ4LWError {
     }
 }
 
-impl std::error::Error for LZ4LWError {}
+impl std::error::Error for Error {}
 
 fn read_lsic(mut input: impl Read) -> Result<usize, io::Error> {
     let mut result = 0;
@@ -77,17 +77,16 @@ pub(crate) fn decompress_lz4lw(
     mut input: impl Read + Seek,
     mut out: impl Write,
     entry: Entry,
-) -> Result<u64, LZ4LWError> {
+) -> Result<u64, Error> {
     if entry.compressed_size > entry.uncompressed_size {
-        return Err(LZ4LWError::InvalidEntry {
+        return Err(Error::InvalidEntry {
             uncompressed_size: entry.uncompressed_size,
             compressed_size: entry.compressed_size,
         });
     }
 
-    let mut out_buf = vec::try_with_capacity(entry.uncompressed_size).ok_or(
-        LZ4LWError::OutputBufferAllocationFailed(entry.uncompressed_size),
-    )?;
+    let mut out_buf = vec::try_with_capacity(entry.uncompressed_size)
+        .ok_or(Error::OutputBufferAllocationFailed(entry.uncompressed_size))?;
 
     // The first few bytes in a LZ4LW compressed file are a header. The header is 1-4 bytes long.
     // If the highest bit of a header byte is 1, this means that the next byte is also part of the
@@ -137,7 +136,7 @@ pub(crate) fn decompress_lz4lw(
             offset += extra * 8192;
         }
         if offset > out_buf.len() {
-            return Err(LZ4LWError::OffsetTooLarge {
+            return Err(Error::OffsetTooLarge {
                 offset,
                 max: out_buf.len(),
             });

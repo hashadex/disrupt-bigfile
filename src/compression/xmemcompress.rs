@@ -14,7 +14,7 @@ const XMEMCOMPRESS_FLAGS: u32 = 0x0;
 const XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE: u32 = 32768;
 
 #[derive(Debug)]
-pub enum XMemCompressError {
+pub enum Error {
     Io(io::Error),
     BadMagic(u32),
     UnknownVersion(u16),
@@ -34,13 +34,13 @@ pub enum XMemCompressError {
     },
 }
 
-impl From<io::Error> for XMemCompressError {
+impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
         Self::Io(err)
     }
 }
 
-impl fmt::Display for XMemCompressError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(error) => write!(f, "io error: {error}"),
@@ -85,35 +85,35 @@ impl fmt::Display for XMemCompressError {
     }
 }
 
-impl std::error::Error for XMemCompressError {}
+impl std::error::Error for Error {}
 
 pub(crate) fn decompress_xmemcompress(
     mut input: impl Read + Seek,
     mut out: impl Write,
-) -> Result<u64, XMemCompressError> {
+) -> Result<u64, Error> {
     let magic = input.read_u32::<BE>()?;
     if magic != XMEMCOMPRESS_LZXNATIVE_SIGNATURE {
-        return Err(XMemCompressError::BadMagic(magic));
+        return Err(Error::BadMagic(magic));
     }
 
     let version = input.read_u16::<BE>()?;
     if version != XMEMCOMPRESS_VERSION {
-        return Err(XMemCompressError::UnknownVersion(version));
+        return Err(Error::UnknownVersion(version));
     }
 
     let reserved = input.read_u16::<BE>()?;
     if reserved != XMEMCOMPRESS_RESERVED {
-        return Err(XMemCompressError::UnexpectedReserved(reserved));
+        return Err(Error::UnexpectedReserved(reserved));
     }
 
     let context_flags = input.read_u32::<BE>()?;
     if context_flags != XMEMCOMPRESS_CONTEXT_FLAGS {
-        return Err(XMemCompressError::UnknownContextFlags(context_flags));
+        return Err(Error::UnknownContextFlags(context_flags));
     }
 
     let flags = input.read_u32::<BE>()?;
     if flags != XMEMCOMPRESS_FLAGS {
-        return Err(XMemCompressError::UnknownFlags(flags));
+        return Err(Error::UnknownFlags(flags));
     }
 
     let window_size = input.read_u32::<BE>()?;
@@ -128,12 +128,12 @@ pub(crate) fn decompress_xmemcompress(
         8_388_608 => WindowSize::MB8,
         16_777_216 => WindowSize::MB16,
         33_554_432 => WindowSize::MB32,
-        _ => return Err(XMemCompressError::UnsupportedWindowSize(window_size)),
+        _ => return Err(Error::UnsupportedWindowSize(window_size)),
     };
 
     let compression_partition_size = input.read_u32::<BE>()?;
     if compression_partition_size != XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE {
-        return Err(XMemCompressError::UnexpectedCompressionPartitionSize(
+        return Err(Error::UnexpectedCompressionPartitionSize(
             compression_partition_size,
         ));
     }
@@ -186,12 +186,12 @@ pub(crate) fn decompress_xmemcompress(
 
         compressed_chunk_size = compressed_chunk_size
             .checked_sub(internal_header_size)
-            .ok_or(XMemCompressError::InvalidChunkSize {
+            .ok_or(Error::InvalidChunkSize {
                 chunk_num,
                 size: compressed_chunk_size,
             })?;
         let mut compressed_chunk_buf = vec::try_with_elements(compressed_chunk_size).ok_or(
-            XMemCompressError::CompressedChunkBufferAllocationFailed(compressed_chunk_size),
+            Error::CompressedChunkBufferAllocationFailed(compressed_chunk_size),
         )?;
 
         input.read_exact(&mut compressed_chunk_buf)?;
@@ -201,7 +201,7 @@ pub(crate) fn decompress_xmemcompress(
         let mut lzxd_context = Lzxd::new(window_size);
         let decompressed_chunk_buf = lzxd_context
             .decompress_next(&compressed_chunk_buf, uncompressed_chunk_size.into())
-            .map_err(|err| XMemCompressError::Lzxd { chunk_num, err })?;
+            .map_err(|err| Error::Lzxd { chunk_num, err })?;
 
         out.write_all(decompressed_chunk_buf)?;
         decompressed +=

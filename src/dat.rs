@@ -3,16 +3,16 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Take, Write};
 use std::path::Path;
 
-use crate::compression::lz4lw::{self, LZ4LWError};
-use crate::compression::xmemcompress::{self, XMemCompressError};
+use crate::compression::lz4lw;
+use crate::compression::xmemcompress;
 use crate::entry::{CompressionScheme, Entry};
 
 #[derive(Debug)]
 pub enum UnpackError {
     Io(io::Error),
     SizeMismatch { expected: u64, actual: u64 },
-    LZ4LW(LZ4LWError),
-    XMemCompress(XMemCompressError),
+    LZ4LW(lz4lw::Error),
+    XMemCompress(xmemcompress::Error),
 }
 
 impl From<io::Error> for UnpackError {
@@ -21,14 +21,14 @@ impl From<io::Error> for UnpackError {
     }
 }
 
-impl From<LZ4LWError> for UnpackError {
-    fn from(err: LZ4LWError) -> Self {
+impl From<lz4lw::Error> for UnpackError {
+    fn from(err: lz4lw::Error) -> Self {
         Self::LZ4LW(err)
     }
 }
 
-impl From<XMemCompressError> for UnpackError {
-    fn from(err: XMemCompressError) -> Self {
+impl From<xmemcompress::Error> for UnpackError {
+    fn from(err: xmemcompress::Error) -> Self {
         Self::XMemCompress(err)
     }
 }
