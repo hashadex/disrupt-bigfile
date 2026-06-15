@@ -87,7 +87,7 @@ impl fmt::Display for XMemCompressError {
 
 impl std::error::Error for XMemCompressError {}
 
-pub fn decompress_xmemcompress(
+pub(crate) fn decompress_xmemcompress(
     mut input: impl Read + Seek,
     mut out: impl Write,
 ) -> Result<u64, XMemCompressError> {

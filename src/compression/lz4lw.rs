@@ -73,7 +73,7 @@ fn read_lsic(mut input: impl Read) -> Result<usize, io::Error> {
     Ok(result)
 }
 
-pub fn decompress_lz4lw(
+pub(crate) fn decompress_lz4lw(
     mut input: impl Read + Seek,
     mut out: impl Write,
     entry: Entry,
