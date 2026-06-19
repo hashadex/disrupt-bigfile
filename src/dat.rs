@@ -1,4 +1,3 @@
-use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Take, Write};
 use std::path::Path;
@@ -7,47 +6,20 @@ use crate::compression::lz4lw;
 use crate::compression::xmemcompress;
 use crate::entry::{CompressionScheme, Entry};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum UnpackError {
-    Io(io::Error),
+    #[error("io error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("expected to unpack {expected} bytes, but unpacked {actual}")]
     SizeMismatch { expected: u64, actual: u64 },
-    LZ4LW(lz4lw::Error),
-    XMemCompress(xmemcompress::Error),
-}
 
-impl From<io::Error> for UnpackError {
-    fn from(err: io::Error) -> Self {
-        Self::Io(err)
-    }
-}
+    #[error("LZ4LW error: {0}")]
+    LZ4LW(#[from] lz4lw::Error),
 
-impl From<lz4lw::Error> for UnpackError {
-    fn from(err: lz4lw::Error) -> Self {
-        Self::LZ4LW(err)
-    }
+    #[error("XMemCompress error: {0}")]
+    XMemCompress(#[from] xmemcompress::Error),
 }
-
-impl From<xmemcompress::Error> for UnpackError {
-    fn from(err: xmemcompress::Error) -> Self {
-        Self::XMemCompress(err)
-    }
-}
-
-impl fmt::Display for UnpackError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(err) => write!(f, "io error: {err}"),
-            Self::SizeMismatch { expected, actual } => write!(
-                f,
-                "expected to unpack {expected} bytes, but unpacked {actual}"
-            ),
-            Self::LZ4LW(err) => write!(f, "LZ4LW error: {err}"),
-            Self::XMemCompress(err) => write!(f, "XMemCompress error: {err}"),
-        }
-    }
-}
-
-impl std::error::Error for UnpackError {}
 
 pub struct Dat<R: Read + Seek> {
     inner: R,

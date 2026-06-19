@@ -9,6 +9,7 @@ clap = { version = "4.5.48", features = ["derive"] }
 indicatif = "0.18.3"
 lzxd = "0.2.6"
 rkyv = "0.8.15"
+thiserror = "2.0.18"
 walkdir = "2.5.0"
 
 [lints.clippy]

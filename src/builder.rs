@@ -1,4 +1,3 @@
-use std::fmt;
 use std::fs::File;
 use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -7,42 +6,20 @@ use crate::entry::{CompressionScheme, Entry, EntryError};
 use crate::fat::Fat;
 use crate::header::{FatHeader, FatVersion};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum PackError {
-    Io(io::Error),
-    Entry(EntryError),
+    #[error("io error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("entry error: {0}")]
+    Entry(#[from] EntryError),
+
+    #[error("can't add more than {} entries", u32::MAX)]
     TableIsFull,
+
+    #[error("can't parse name hash from unknown file path {0}")]
     CantParseUnknownFileHash(PathBuf),
 }
-
-impl From<io::Error> for PackError {
-    fn from(err: io::Error) -> Self {
-        Self::Io(err)
-    }
-}
-
-impl From<EntryError> for PackError {
-    fn from(err: EntryError) -> Self {
-        Self::Entry(err)
-    }
-}
-
-impl fmt::Display for PackError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(err) => write!(f, "io error: {err}"),
-            Self::Entry(err) => write!(f, "entry error: {err}"),
-            Self::TableIsFull => write!(f, "can't add more than {} entries", u32::MAX),
-            Self::CantParseUnknownFileHash(path) => write!(
-                f,
-                "can't parse name hash from unknown file path {}",
-                path.display()
-            ),
-        }
-    }
-}
-
-impl std::error::Error for PackError {}
 
 pub struct ArchiveBuilder<W: Write + Seek> {
     fat_header: FatHeader,

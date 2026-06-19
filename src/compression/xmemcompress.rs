@@ -1,4 +1,3 @@
-use std::fmt;
 use std::io::{self, Read, Seek, Write};
 
 use byteorder::{BE, ReadBytesExt};
@@ -13,79 +12,50 @@ const XMEMCOMPRESS_CONTEXT_FLAGS: u32 = 0x0;
 const XMEMCOMPRESS_FLAGS: u32 = 0x0;
 const XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE: u32 = 32768;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Io(io::Error),
+    #[error("io error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error(
+        "bad magic 0x{0:X} in compressed file's header, expected 0x{XMEMCOMPRESS_LZXNATIVE_SIGNATURE:X}"
+    )]
     BadMagic(u32),
+
+    #[error(
+        "unknown version 0x{0:X} in compressed file's header, expected 0x{XMEMCOMPRESS_VERSION:X}"
+    )]
     UnknownVersion(u16),
+
+    #[error("unexpected data 0x{0:X} in reserved, expected 0x{XMEMCOMPRESS_RESERVED:X}")]
     UnexpectedReserved(u16),
+
+    #[error("unknown context flags 0x{0:X}, expected 0x{XMEMCOMPRESS_CONTEXT_FLAGS:X}")]
     UnknownContextFlags(u32),
+
+    #[error("unknown flags 0x{0:X}, expected 0x{XMEMCOMPRESS_FLAGS:X}")]
     UnknownFlags(u32),
+
+    #[error("window size {0} is unsupported by lzxd")]
     UnsupportedWindowSize(u32),
+
+    #[error(
+        "unexpected compression partition size {0}, expected {XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE}"
+    )]
     UnexpectedCompressionPartitionSize(u32),
-    InvalidChunkSize {
-        chunk_num: u64,
-        size: u32,
-    },
+
+    #[error("chunk #{chunk_num} has an invalid size of {size}")]
+    InvalidChunkSize { chunk_num: u64, size: u32 },
+
+    #[error("failed to allocate compressed chunk buffer of {0} bytes")]
     CompressedChunkBufferAllocationFailed(u32),
+
+    #[error("lzxd error on chunk #{chunk_num}: {err}")]
     Lzxd {
         chunk_num: u64,
         err: lzxd::DecompressError,
     },
 }
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Self::Io(err)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(error) => write!(f, "io error: {error}"),
-            Self::BadMagic(magic) => write!(
-                f,
-                "bad magic 0x{magic:X} in compressed file's header, expected 0x{XMEMCOMPRESS_LZXNATIVE_SIGNATURE:X}"
-            ),
-            Self::UnknownVersion(version) => write!(
-                f,
-                "unknown version 0x{version:X} in compressed file's header, expected 0x{XMEMCOMPRESS_VERSION:X}"
-            ),
-            Self::UnexpectedReserved(reserved) => write!(
-                f,
-                "unexpected data 0x{reserved:X} in reserved, expected 0x{XMEMCOMPRESS_RESERVED:X}"
-            ),
-            Self::UnknownContextFlags(cflags) => write!(
-                f,
-                "unknown context flags 0x{cflags:X}, expected 0x{XMEMCOMPRESS_CONTEXT_FLAGS:X}"
-            ),
-            Self::UnknownFlags(flags) => write!(
-                f,
-                "unknown flags 0x{flags:X}, expected 0x{XMEMCOMPRESS_FLAGS:X}"
-            ),
-            Self::UnsupportedWindowSize(size) => {
-                write!(f, "window size {size} is unsupported by lzxd")
-            }
-            Self::UnexpectedCompressionPartitionSize(part_size) => write!(
-                f,
-                "unexpected compression partition size {part_size}, expected {XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE}"
-            ),
-            Self::InvalidChunkSize { chunk_num, size } => {
-                write!(f, "chunk #{chunk_num} has an invalid size of {size}")
-            }
-            Self::CompressedChunkBufferAllocationFailed(size) => write!(
-                f,
-                "failed to allocate compressed chunk buffer of {size} bytes"
-            ),
-            Self::Lzxd { chunk_num, err } => {
-                write!(f, "lzxd error on chunk #{chunk_num}: {err}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 pub(crate) fn decompress_xmemcompress(
     mut input: impl Read + Seek,

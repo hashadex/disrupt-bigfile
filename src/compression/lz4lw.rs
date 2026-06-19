@@ -1,5 +1,4 @@
 use std::cmp;
-use std::fmt;
 use std::io::{self, Read, Seek, Write};
 
 use byteorder::{LE, ReadBytesExt};
@@ -7,24 +6,26 @@ use byteorder::{LE, ReadBytesExt};
 use crate::entry::Entry;
 use crate::vec;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Io(io::Error),
+    #[error("io error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error(
+        "can't perform decompression if entry's compressed size ({compressed_size}) is larger than the uncompressed size ({uncompressed_size})"
+    )]
     InvalidEntry {
         uncompressed_size: u64,
         compressed_size: u64,
     },
-    OutputBufferAllocationFailed(u64),
-    OffsetTooLarge {
-        offset: usize,
-        max: usize,
-    },
-}
 
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Self::Io(err)
-    }
+    #[error("failed to allocate output buffer of {0} bytes")]
+    OutputBufferAllocationFailed(u64),
+
+    #[error(
+        "offset ({offset}) cannot be larger than the amount of currently decompressed bytes ({max})"
+    )]
+    OffsetTooLarge { offset: usize, max: usize },
 }
 
 impl From<io::ErrorKind> for Error {
@@ -32,30 +33,6 @@ impl From<io::ErrorKind> for Error {
         Self::Io(kind.into())
     }
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(err) => write!(f, "io error: {err}"),
-            Self::InvalidEntry {
-                uncompressed_size,
-                compressed_size,
-            } => write!(
-                f,
-                "can't perform decompression if entry's compressed size ({compressed_size}) is larger than the uncompressed size ({uncompressed_size})"
-            ),
-            Self::OutputBufferAllocationFailed(size) => {
-                write!(f, "failed to allocate output buffer of {size} bytes")
-            }
-            Self::OffsetTooLarge { offset, max } => write!(
-                f,
-                "offset ({offset}) cannot be larger than the amount of currently decompressed bytes ({max})"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 fn read_lsic(mut input: impl Read) -> Result<usize, io::Error> {
     let mut result = 0;

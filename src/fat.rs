@@ -1,4 +1,3 @@
-use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::Path;
@@ -6,129 +5,75 @@ use std::path::Path;
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
 
 use crate::entry::{Entry, EntryError};
-use crate::header::{self, CompressionVersion, FatHeader, FatVersion, Platform, TableVersion};
+use crate::header::{
+    CompressionVersion, FAT3_MAGIC, FAT5_MAGIC, FatHeader, FatVersion, Platform, TableVersion,
+};
 use crate::vec;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum FatDeserializationError {
-    Io(io::Error),
+    #[error("io error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("bad magic 0x{0:X}, expected 0x{FAT3_MAGIC:X} or 0x{FAT5_MAGIC:X}")]
     BadMagic(u32),
+
+    #[error("unknown table version {0}")]
     UnknownTableVersion(u32),
+
+    #[error("platform id {platform_id} is not supported for {fat_version}")]
     UnsupportedPlatformId {
         platform_id: u8,
         fat_version: FatVersion,
     },
+
+    #[error("unknown compression version {0}")]
     UnknownCompressionVersion(u8),
+
+    #[error("unknown name hash version {0}")]
     UnknownNameHashVersion(u8),
+
+    #[error("unexpected padding byte 0x{0:X}, expected 0x00")]
     UnexpectedPaddingByte(u8),
+
+    #[error("failed to allocate memory for {0} dependencies")]
     DependencyAllocationFailed(u32),
+
+    #[error("failed to allocate memory for {0} entries")]
     EntryAllocationFailed(u32),
+
+    #[error(
+        "unknown compression scheme id {scheme_id} for compression version {compression_version}"
+    )]
     UnknownCompressionScheme {
         scheme_id: u8,
         compression_version: CompressionVersion,
     },
 }
 
-impl From<io::Error> for FatDeserializationError {
-    fn from(err: io::Error) -> Self {
-        FatDeserializationError::Io(err)
-    }
-}
-
-impl fmt::Display for FatDeserializationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(err) => write!(f, "io error: {err}"),
-            Self::BadMagic(magic) => {
-                write!(
-                    f,
-                    "bad magic 0x{magic:X}, expected 0x{:X} or 0x{:X}",
-                    header::FAT3_MAGIC,
-                    header::FAT5_MAGIC,
-                )
-            }
-            Self::UnknownTableVersion(version) => {
-                write!(f, "unknown table version {version}")
-            }
-            Self::UnsupportedPlatformId {
-                platform_id,
-                fat_version,
-            } => write!(
-                f,
-                "platform id {platform_id} is not supported for {fat_version}"
-            ),
-            Self::UnknownCompressionVersion(version) => {
-                write!(f, "unknown compression version {version}")
-            }
-            Self::UnknownNameHashVersion(version) => {
-                write!(f, "unknown name hash version {version}")
-            }
-            Self::UnexpectedPaddingByte(byte) => {
-                write!(f, "unexpected padding byte 0x{byte:X}, expected 0x00")
-            }
-            Self::DependencyAllocationFailed(dependencies) => {
-                write!(
-                    f,
-                    "failed to allocate memory for {dependencies} dependencies"
-                )
-            }
-            Self::EntryAllocationFailed(entries) => {
-                write!(f, "failed to allocate memory for {entries} entries")
-            }
-            Self::UnknownCompressionScheme {
-                scheme_id,
-                compression_version,
-            } => write!(
-                f,
-                "unknown compression scheme id {scheme_id} for compression version {compression_version}"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for FatDeserializationError {}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum FatConstructionError {
+    #[error("platform {platform} is not supported for {fat_version}")]
     UnsupportedPlatform {
         platform: Platform,
         fat_version: FatVersion,
     },
+
+    #[error(
+        "dependency count is too large to fit into header, expected {max} dependencies max, got {0}",
+        max = u32::MAX
+    )]
     DependencyCountWontFit(usize),
+
+    #[error(
+        "entry count is too large to fit into header, expected {max} entries max, got {0}",
+        max = u32::MAX
+    )]
     EntryCountWontFit(usize),
-    Entry {
-        entry: Entry,
-        error: EntryError,
-    },
-}
 
-impl fmt::Display for FatConstructionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnsupportedPlatform {
-                platform,
-                fat_version,
-            } => write!(f, "platform {platform} is not supported for {fat_version}"),
-            Self::DependencyCountWontFit(count) => write!(
-                f,
-                "dependency count is too large to fit into header, expected {} dependencies max, got {count}",
-                u32::MAX
-            ),
-            Self::EntryCountWontFit(count) => write!(
-                f,
-                "entry count is too large to fit into header, expected {} entries max, got {count}",
-                u32::MAX
-            ),
-            Self::Entry { entry, error } => write!(
-                f,
-                "error on entry with name hash 0x{:X}: {error}",
-                entry.name_hash
-            ),
-        }
-    }
+    #[error("error on entry with name hash 0x{:X}: {error}", .entry.name_hash)]
+    Entry { entry: Entry, error: EntryError },
 }
-
-impl std::error::Error for FatConstructionError {}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Fat {

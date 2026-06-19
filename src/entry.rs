@@ -8,66 +8,30 @@ use crate::fat::FatDeserializationError;
 use crate::header::{CompressionVersion, TableVersion};
 use crate::name_hash_db;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum EntryError {
-    Io(io::Error),
-    NameHashWontFit {
-        hash: u64,
-        max: u64,
-    },
-    OffsetWontFit {
-        offset: u64,
-        max: u64,
-    },
+    #[error("io error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("name hash 0x{hash:X} is too large for current table version (expected 0x{max:X} max)")]
+    NameHashWontFit { hash: u64, max: u64 },
+
+    #[error("offset 0x{offset:X} is too large for current table version (expected 0x{max:X} max)")]
+    OffsetWontFit { offset: u64, max: u64 },
+
+    #[error(
+        "compression scheme {scheme} is not supported by compression version {compression_version}"
+    )]
     UnsupportedCompressionScheme {
         scheme: CompressionScheme,
         compression_version: CompressionVersion,
     },
-    UncompressedSizeWontFit {
-        size: u64,
-        max: u64,
-    },
-    CompressedSizeWontFit {
-        size: u64,
-        max: u64,
-    },
-}
 
-impl From<io::Error> for EntryError {
-    fn from(err: io::Error) -> Self {
-        Self::Io(err)
-    }
-}
+    #[error("uncompressed size {size} is too large for current table version (expected {max} max)")]
+    UncompressedSizeWontFit { size: u64, max: u64 },
 
-impl fmt::Display for EntryError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(err) => write!(f, "io error: {err}"),
-            Self::NameHashWontFit { hash, max } => write!(
-                f,
-                "name hash 0x{hash:X} is too large for current table version (expected 0x{max:X} max)"
-            ),
-            Self::OffsetWontFit { offset, max } => write!(
-                f,
-                "offset 0x{offset:X} is too large for current table version (expected 0x{max:X} max)"
-            ),
-            Self::UnsupportedCompressionScheme {
-                scheme,
-                compression_version,
-            } => write!(
-                f,
-                "compression scheme {scheme} is not supported by compression version {compression_version}"
-            ),
-            Self::UncompressedSizeWontFit { size, max } => write!(
-                f,
-                "uncompressed size {size} is too large for current table version (expected {max} max)"
-            ),
-            Self::CompressedSizeWontFit { size, max } => write!(
-                f,
-                "compressed size {size} is too large for current table version (expected {max} max)"
-            ),
-        }
-    }
+    #[error("compressed size {size} is too large for current table version (expected {max} max)")]
+    CompressedSizeWontFit { size: u64, max: u64 },
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
