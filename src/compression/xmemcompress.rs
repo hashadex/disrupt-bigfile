@@ -21,14 +21,10 @@ pub enum Error {
     #[error("io error: {0}")]
     Io(#[from] io::Error),
 
-    #[error(
-        "bad magic 0x{0:X} in compressed file's header, expected 0x{XMEMCOMPRESS_LZXNATIVE_SIGNATURE:X}"
-    )]
+    #[error("bad magic 0x{0:X} in header, expected 0x{XMEMCOMPRESS_LZXNATIVE_SIGNATURE:X}")]
     BadMagic(u32),
 
-    #[error(
-        "unknown version 0x{0:X} in compressed file's header, expected 0x{XMEMCOMPRESS_VERSION:X}"
-    )]
+    #[error("unknown version 0x{0:X} in header, expected 0x{XMEMCOMPRESS_VERSION:X}")]
     UnknownVersion(u16),
 
     #[error("unexpected data 0x{0:X} in reserved, expected 0x{XMEMCOMPRESS_RESERVED:X}")]
