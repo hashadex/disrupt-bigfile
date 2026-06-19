@@ -37,11 +37,11 @@ pub enum EntryError {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CompressionScheme {
     None,
-    LZO1x,
+    Lzo1x,
     Zlib,
-    XMemCompress,
-    LZMA,
-    LZ4LW,
+    Xmemcompress,
+    Lzma,
+    Lz4lw,
     Oodle,
 }
 
@@ -49,11 +49,11 @@ impl fmt::Display for CompressionScheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::None => write!(f, "no compression"),
-            Self::LZO1x => write!(f, "LZO1x"),
+            Self::Lzo1x => write!(f, "LZO1x"),
             Self::Zlib => write!(f, "Zlib"),
-            Self::XMemCompress => write!(f, "XMemCompress"),
-            Self::LZMA => write!(f, "LZMA"),
-            Self::LZ4LW => write!(f, "LZ4LW"),
+            Self::Xmemcompress => write!(f, "XMemCompress"),
+            Self::Lzma => write!(f, "LZMA"),
+            Self::Lz4lw => write!(f, "LZ4LW"),
             Self::Oodle => write!(f, "Oodle"),
         }
     }
@@ -66,14 +66,14 @@ impl CompressionScheme {
     ) -> Result<Self, FatDeserializationError> {
         match (scheme_id, compression_version) {
             (0, _) => Ok(Self::None),
-            (1, CompressionVersion::V4 | CompressionVersion::V5) => Ok(Self::LZO1x),
+            (1, CompressionVersion::V4 | CompressionVersion::V5) => Ok(Self::Lzo1x),
             (2, CompressionVersion::V4 | CompressionVersion::V5) => Ok(Self::Zlib),
-            (3, CompressionVersion::V5) => Ok(Self::XMemCompress),
+            (3, CompressionVersion::V5) => Ok(Self::Xmemcompress),
             (1, CompressionVersion::V6) | (2, CompressionVersion::V8 | CompressionVersion::V9) => {
-                Ok(Self::LZMA)
+                Ok(Self::Lzma)
             }
             (2, CompressionVersion::V6) | (3, CompressionVersion::V8 | CompressionVersion::V9) => {
-                Ok(Self::LZ4LW)
+                Ok(Self::Lz4lw)
             }
             (1, CompressionVersion::V8 | CompressionVersion::V9) => Ok(Self::Oodle),
             _ => Err(FatDeserializationError::UnknownCompressionScheme {
@@ -90,16 +90,16 @@ impl CompressionScheme {
         match (self, compression_version) {
             (Self::None, _) => Ok(0),
 
-            (Self::LZO1x, CompressionVersion::V4 | CompressionVersion::V5)
-            | (Self::LZMA, CompressionVersion::V6)
+            (Self::Lzo1x, CompressionVersion::V4 | CompressionVersion::V5)
+            | (Self::Lzma, CompressionVersion::V6)
             | (Self::Oodle, CompressionVersion::V8 | CompressionVersion::V9) => Ok(1),
 
             (Self::Zlib, CompressionVersion::V4 | CompressionVersion::V5)
-            | (Self::LZ4LW, CompressionVersion::V6)
-            | (Self::LZMA, CompressionVersion::V8 | CompressionVersion::V9) => Ok(2),
+            | (Self::Lz4lw, CompressionVersion::V6)
+            | (Self::Lzma, CompressionVersion::V8 | CompressionVersion::V9) => Ok(2),
 
-            (Self::XMemCompress, CompressionVersion::V5)
-            | (Self::LZ4LW, CompressionVersion::V8 | CompressionVersion::V9) => Ok(3),
+            (Self::Xmemcompress, CompressionVersion::V5)
+            | (Self::Lz4lw, CompressionVersion::V8 | CompressionVersion::V9) => Ok(3),
 
             _ => Err(EntryError::UnsupportedCompressionScheme {
                 scheme: self,

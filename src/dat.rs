@@ -15,10 +15,10 @@ pub enum UnpackError {
     SizeMismatch { expected: u64, actual: u64 },
 
     #[error("LZ4LW error: {0}")]
-    LZ4LW(#[from] lz4lw::Error),
+    Lz4lw(#[from] lz4lw::Error),
 
     #[error("XMemCompress error: {0}")]
-    XMemCompress(#[from] xmemcompress::Error),
+    Xmemcompress(#[from] xmemcompress::Error),
 }
 
 pub struct Dat<R: Read + Seek> {
@@ -56,15 +56,15 @@ impl<R: Read + Seek> Dat<R> {
 
         let decompressed = match entry.compression_scheme {
             CompressionScheme::None => io::copy(&mut raw_data, &mut out).map_err(UnpackError::Io),
-            CompressionScheme::LZO1x => todo!(),
+            CompressionScheme::Lzo1x => todo!(),
             CompressionScheme::Zlib => todo!(),
-            CompressionScheme::XMemCompress => {
+            CompressionScheme::Xmemcompress => {
                 xmemcompress::decompress_xmemcompress(raw_data, &mut out)
-                    .map_err(UnpackError::XMemCompress)
+                    .map_err(UnpackError::Xmemcompress)
             }
-            CompressionScheme::LZMA => todo!(),
-            CompressionScheme::LZ4LW => {
-                lz4lw::decompress_lz4lw(raw_data, &mut out, entry).map_err(UnpackError::LZ4LW)
+            CompressionScheme::Lzma => todo!(),
+            CompressionScheme::Lz4lw => {
+                lz4lw::decompress_lz4lw(raw_data, &mut out, entry).map_err(UnpackError::Lz4lw)
             }
             CompressionScheme::Oodle => todo!(),
         }?;
