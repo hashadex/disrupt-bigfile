@@ -13,6 +13,10 @@ const XMEMCOMPRESS_FLAGS: u32 = 0x0;
 const XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE: u32 = 32768;
 
 #[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct ChunkDecompressionError(lzxd::DecompressError);
+
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("io error: {0}")]
     Io(#[from] io::Error),
@@ -44,17 +48,14 @@ pub enum Error {
     )]
     UnexpectedCompressionPartitionSize(u32),
 
-    #[error("chunk #{chunk_num} has an invalid size of {size}")]
-    InvalidChunkSize { chunk_num: u64, size: u32 },
+    #[error("chunk has an invalid size of {0}")]
+    InvalidChunkSize(u32),
 
     #[error("failed to allocate compressed chunk buffer of {0} bytes")]
     CompressedChunkBufferAllocationFailed(u32),
 
-    #[error("lzxd error on chunk #{chunk_num}: {err}")]
-    Lzxd {
-        chunk_num: u64,
-        err: lzxd::DecompressError,
-    },
+    #[error("failed to decompress chunk: {0}")]
+    ChunkDecompression(#[from] ChunkDecompressionError),
 }
 
 pub(crate) fn decompress_xmemcompress(
@@ -116,7 +117,7 @@ pub(crate) fn decompress_xmemcompress(
 
     let mut decompressed = 0;
     let expected_chunk_count = uncompressed_file_size.div_ceil(compression_partition_size.into());
-    for chunk_num in 0..expected_chunk_count {
+    for _ in 0..expected_chunk_count {
         // Each chunk in the 0F F5 12 EE format has two headers: external and internal.
         //
         // 1. External header:
@@ -156,10 +157,7 @@ pub(crate) fn decompress_xmemcompress(
 
         compressed_chunk_size = compressed_chunk_size
             .checked_sub(internal_header_size)
-            .ok_or(Error::InvalidChunkSize {
-                chunk_num,
-                size: compressed_chunk_size,
-            })?;
+            .ok_or(Error::InvalidChunkSize(compressed_chunk_size))?;
         let mut compressed_chunk_buf = vec::try_with_elements(compressed_chunk_size).ok_or(
             Error::CompressedChunkBufferAllocationFailed(compressed_chunk_size),
         )?;
@@ -171,7 +169,7 @@ pub(crate) fn decompress_xmemcompress(
         let mut lzxd_context = Lzxd::new(window_size);
         let decompressed_chunk_buf = lzxd_context
             .decompress_next(&compressed_chunk_buf, uncompressed_chunk_size.into())
-            .map_err(|err| Error::Lzxd { chunk_num, err })?;
+            .map_err(ChunkDecompressionError)?;
 
         out.write_all(decompressed_chunk_buf)?;
         decompressed +=
