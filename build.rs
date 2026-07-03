@@ -193,7 +193,7 @@ fn main() -> Result<(), String> {
     for filelist_path in FILELIST_PATHS {
         let mut new_filenames_count = 0;
 
-        let fat3_hash = filelist_path.starts_with("wd1");
+        let fat3_hash = filelist_path.starts_with("filelists/wd1");
 
         let filelist_file = BufReader::new(File::open(filelist_path).map_err(|err| {
             format!(
