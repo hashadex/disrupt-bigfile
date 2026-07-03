@@ -1,23 +1,14 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use std::hash::Hasher;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 use std::{env, fs};
 
+use fnv1::Fnv1Hasher;
 use rkyv::rancor::Error;
 use rkyv::{Archive, Serialize};
-
-fn fnv1_hash(bytes: &[u8]) -> u64 {
-    let mut hash: u64 = 0xCBF2_9CE4_8422_2325; // Set hash to default seed
-
-    for &byte in bytes {
-        hash = hash.wrapping_mul(0x0100_0000_01B3);
-        hash ^= u64::from(byte);
-    }
-
-    hash
-}
 
 const FILELIST_PATHS: [&str; 157] = [
     "filelists/wd1/common.filelist",
@@ -209,7 +200,10 @@ fn main() -> Result<(), String> {
             .filter(|filename| !filename.starts_with(';'));
 
         for filename in filenames {
-            let mut name_hash = fnv1_hash(filename.as_bytes());
+            let mut hasher = Fnv1Hasher::new();
+            hasher.write(filename.as_bytes());
+
+            let mut name_hash = hasher.finish();
             if fat3_hash {
                 name_hash &= 0xFFFF_FFFF;
             } else {

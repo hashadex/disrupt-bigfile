@@ -163,6 +163,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "clap",
+ "fnv1",
  "indicatif",
  "lzxd",
  "rkyv",
@@ -181,6 +182,12 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "fnv1"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bae60e7a76e5c9aa7d3e19da5a34c5406c6a968b7024c20ef805a5ea4cc67f99"
 
 [[package]]
 name = "futures-core"

@@ -1,6 +1,9 @@
 use std::fs::File;
+use std::hash::Hasher;
 use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+
+use fnv1::Fnv1Hasher;
 
 use crate::entry::{CompressionScheme, Entry, EntryError};
 use crate::fat::Fat;
@@ -57,12 +60,9 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         } else {
             let windows_path = path.to_string_lossy().to_lowercase().replace('/', "\\");
 
-            hash = 0xCBF2_9CE4_8422_2325; // Set hash to default seed
-
-            for byte in windows_path.bytes() {
-                hash = hash.wrapping_mul(0x0100_0000_01B3);
-                hash ^= u64::from(byte);
-            }
+            let mut hasher = Fnv1Hasher::new();
+            hasher.write(windows_path.as_bytes());
+            hash = hasher.finish();
 
             if self.fat_header.fat_version() == FatVersion::Fat5 {
                 // The three highest bits in all FAT5 name hashes seem to be always set to 101.
