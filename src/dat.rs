@@ -11,14 +11,14 @@ pub enum UnpackError {
     #[error("io error: {0}")]
     Io(#[from] io::Error),
 
-    #[error("expected to unpack {expected} bytes, but unpacked {actual}")]
-    SizeMismatch { expected: u64, actual: u64 },
-
     #[error("LZ4LW error: {0}")]
     Lz4lw(#[from] lz4lw::Error),
 
     #[error("XMemCompress error: {0}")]
     Xmemcompress(#[from] xmemcompress::Error),
+
+    #[error("expected to unpack {expected} bytes, but unpacked {actual}")]
+    SizeMismatch { expected: u64, actual: u64 },
 }
 
 pub struct Dat<R: Read + Seek> {
