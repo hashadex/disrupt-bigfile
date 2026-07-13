@@ -168,8 +168,7 @@ pub(crate) fn decompress_xmemcompress(
             .map_err(ChunkDecompressionError)?;
 
         out.write_all(decompressed_chunk_buf)?;
-        decompressed +=
-            u64::try_from(decompressed_chunk_buf.len()).expect("usize should fit into u64 on PCs");
+        decompressed += decompressed_chunk_buf.len() as u64;
     }
 
     Ok(decompressed)
