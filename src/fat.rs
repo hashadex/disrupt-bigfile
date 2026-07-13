@@ -93,8 +93,9 @@ impl Fat {
 
     pub fn new(header: FatHeader, entries: Vec<Entry>) -> Result<Self, FatConstructionError> {
         let entry_count = entries.len();
-        u32::try_from(entry_count)
-            .map_err(|_| FatConstructionError::EntryCountWontFit(entry_count))?;
+        if u32::try_from(entry_count).is_err() {
+            return Err(FatConstructionError::EntryCountWontFit(entry_count));
+        }
 
         for &entry in &entries {
             entry
