@@ -1,5 +1,7 @@
+use std::borrow::Cow;
 use std::fs::File;
 use std::hash::Hasher;
+use std::hint;
 use std::io::{self, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
@@ -20,8 +22,8 @@ pub enum PackError {
     #[error("can't add more than {} entries", u32::MAX)]
     TableIsFull,
 
-    #[error("can't parse name hash from unknown file path {0}")]
-    CantParseUnknownFileHash(PathBuf),
+    #[error("can't compute name hash for invalid special path {0}")]
+    InvalidSpecialPath(PathBuf),
 }
 
 pub struct ArchiveBuilder<W: Write + Seek> {
@@ -45,37 +47,59 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         })
     }
 
-    fn compute_name_hash(&self, relative_entry_path: impl AsRef<Path>) -> Result<u64, PackError> {
-        let path = relative_entry_path.as_ref();
-
-        let mut hash;
-
+    fn compute_name_hash(&self, path: &Path) -> Option<u64> {
         if path.starts_with("__UNKNOWN") {
-            hash = path
-                .file_stem()
-                .and_then(|stem| u64::from_str_radix(&stem.to_string_lossy(), 16).ok())
-                .ok_or_else(|| PackError::CantParseUnknownFileHash(path.to_path_buf()))?;
-        } else if path.starts_with("__DUPLICATE") {
-            todo!();
+            let stem = path.file_stem()?.to_str()?;
+            u64::from_str_radix(stem, 16).ok()
         } else {
-            let windows_path = path.to_string_lossy().to_lowercase().replace('/', "\\");
+            // By avoiding calling functions like to_str when hashing regular paths and using
+            // cold_path hints, we get a 50% performance boost.
 
             let mut hasher = Fnv1Hasher::new();
-            hasher.write(windows_path.as_bytes());
-            hash = hasher.finish();
 
-            if self.fat_header.fat_version() == FatVersion::Fat5 {
-                // The three highest bits in all FAT5 name hashes seem to be always set to 101.
-                hash &= 0x1FFF_FFFF_FFFF_FFFF; // 0b0001_1111...
-                hash |= 0xA000_0000_0000_0000; // 0b1010_0000...
+            let clean_path = if path.starts_with("__DUPLICATE") {
+                hint::cold_path();
+
+                let (clean_stem, _) = path.file_stem()?.to_str()?.split_once("__DUPLICATE_")?;
+                let extension = path.extension();
+
+                let mut clean_path = path
+                    .strip_prefix("__DUPLICATE")
+                    .expect("just checked that path starts with __DUPLICATE")
+                    .with_file_name(clean_stem);
+                if let Some(extension) = extension {
+                    clean_path.set_extension(extension);
+                }
+
+                Cow::Owned(clean_path)
+            } else {
+                Cow::Borrowed(path)
+            };
+
+            for &byte in clean_path.as_os_str().as_encoded_bytes() {
+                let windows_byte = if byte == b'/' {
+                    hint::cold_path();
+
+                    b'\\'
+                } else {
+                    byte
+                };
+
+                hasher.write_u8(windows_byte);
             }
-        }
 
-        if self.fat_header.fat_version() == FatVersion::Fat3 {
-            hash &= 0xFFFF_FFFF;
-        }
+            let mut hash = hasher.finish();
+            match self.fat_header.fat_version() {
+                FatVersion::Fat3 => hash &= 0xFFFF_FFFF,
+                FatVersion::Fat5 => {
+                    // The three highest bits in all FAT5 name hashes seem to be always set to 101.
+                    hash &= 0x1FFF_FFFF_FFFF_FFFF; // 0b0001_1111...
+                    hash |= 0xA000_0000_0000_0000; // 0b1010_0000...
+                }
+            }
 
-        Ok(hash)
+            Some(hash)
+        }
     }
 
     pub fn add(
@@ -100,7 +124,10 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
             self.last_write_failed = false;
         }
 
-        let name_hash = self.compute_name_hash(relative_entry_path)?;
+        let relative_entry_path = relative_entry_path.as_ref();
+        let name_hash = self
+            .compute_name_hash(relative_entry_path)
+            .ok_or_else(|| PackError::InvalidSpecialPath(relative_entry_path.to_path_buf()))?;
         let offset = self.dat_position;
 
         let copied =
