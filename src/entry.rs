@@ -1,6 +1,7 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::io::{self, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use byteorder::{BE, ReadBytesExt, WriteBytesExt};
 
@@ -464,11 +465,14 @@ impl Entry {
             .map_err(EntryError::Io)
     }
 
-    pub fn path(self) -> PathBuf {
-        name_hash_db::get(self.name_hash).map_or_else(
-            || format!("__UNKNOWN/{:X}", self.name_hash).into(),
-            PathBuf::from,
-        )
+    pub fn path(self) -> Cow<'static, Path> {
+        if let Some(path) = name_hash_db::get(self.name_hash) {
+            Cow::Borrowed(path.as_ref())
+        } else {
+            let unknown_path = PathBuf::from(format!("__UNKNOWN/{:X}", self.name_hash));
+
+            Cow::Owned(unknown_path)
+        }
     }
 }
 
