@@ -11,6 +11,9 @@ pub enum UnpackError {
     #[error("io error: {0}")]
     Io(#[from] io::Error),
 
+    #[error("{0} decompression is not supported")]
+    DecompressionUnsupported(CompressionScheme),
+
     #[error("LZ4LW error: {0}")]
     Lz4lw(#[from] lz4lw::Error),
 
@@ -56,17 +59,14 @@ impl<R: Read + Seek> Dat<R> {
 
         let decompressed = match entry.compression_scheme {
             CompressionScheme::None => io::copy(&mut raw_data, &mut out).map_err(UnpackError::Io),
-            CompressionScheme::Lzo1x => todo!(),
-            CompressionScheme::Zlib => todo!(),
             CompressionScheme::Xmemcompress => {
                 xmemcompress::decompress_xmemcompress(raw_data, &mut out)
                     .map_err(UnpackError::Xmemcompress)
             }
-            CompressionScheme::Lzma => todo!(),
             CompressionScheme::Lz4lw => {
                 lz4lw::decompress_lz4lw(raw_data, &mut out, entry).map_err(UnpackError::Lz4lw)
             }
-            CompressionScheme::Oodle => todo!(),
+            other => Err(UnpackError::DecompressionUnsupported(other)),
         }?;
 
         out.flush()?;
