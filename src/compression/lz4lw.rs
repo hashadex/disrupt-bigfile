@@ -22,6 +22,9 @@ pub enum Error {
     #[error("failed to allocate output buffer of {0} bytes")]
     OutputBufferAllocationFailed(u64),
 
+    #[error("offset extra byte ({0}) is so large it caused an overflow")]
+    OffsetExtraOverflow(u8),
+
     #[error(
         "offset ({offset}) cannot be larger than the amount of currently decompressed bytes ({max})"
     )]
@@ -109,8 +112,12 @@ pub(crate) fn decompress_lz4lw(
 
         let mut offset: usize = input.read_u16::<LE>()?.into();
         if offset >> 13 == 0b111 {
-            let extra: usize = input.read_u8()?.into();
-            offset += extra * 8192;
+            let extra = input.read_u8()?;
+
+            offset = usize::from(extra)
+                .checked_mul(8192)
+                .and_then(|extra_bytes| offset.checked_add(extra_bytes))
+                .ok_or(Error::OffsetExtraOverflow(extra))?;
         }
         if offset > out_buf.len() {
             return Err(Error::OffsetTooLarge {
