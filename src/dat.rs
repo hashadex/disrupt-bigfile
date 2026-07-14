@@ -104,7 +104,7 @@ impl<R: Read + Seek> Dat<R> {
         self.unpack_to_file(entry, dest)
     }
 
-    pub fn bulk_unpack_to_dir(
+    pub fn unpack_to_dir_iter(
         &mut self,
         mut entries: Vec<Entry>,
         archive_root_dir: impl AsRef<Path>,
