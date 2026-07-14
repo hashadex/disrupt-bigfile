@@ -333,8 +333,11 @@ impl FatHeader {
             });
         }
 
-        u32::try_from(dependencies.len())
-            .map_err(|_| FatConstructionError::DependencyCountWontFit(dependencies.len()))?;
+        if u32::try_from(dependencies.len()).is_err() {
+            return Err(FatConstructionError::DependencyCountWontFit(
+                dependencies.len(),
+            ));
+        }
 
         Ok(Self {
             fat_version: FatVersion::Fat5,
