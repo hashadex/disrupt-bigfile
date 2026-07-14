@@ -28,6 +28,7 @@ impl FatVersion {
         }
     }
 
+    #[must_use]
     pub fn to_magic(self) -> u32 {
         match self {
             Self::Fat3 => FAT3_MAGIC,
@@ -135,6 +136,7 @@ impl Platform {
         }
     }
 
+    #[must_use]
     pub fn is_supported_for(self, fat_version: FatVersion) -> bool {
         self.try_to_platform_id(fat_version).is_ok()
     }
@@ -301,6 +303,7 @@ pub struct FatHeader {
 }
 
 impl FatHeader {
+    #[must_use]
     pub fn new_fat3(
         table_version: TableVersion,
         platform: Platform,
@@ -427,34 +430,42 @@ impl FatHeader {
         Ok(())
     }
 
+    #[must_use]
     pub fn fat_version(&self) -> FatVersion {
         self.fat_version
     }
 
+    #[must_use]
     pub fn table_version(&self) -> TableVersion {
         self.table_version
     }
 
+    #[must_use]
     pub fn platform(&self) -> Platform {
         self.platform
     }
 
+    #[must_use]
     pub fn compression_version(&self) -> CompressionVersion {
         self.compression_version
     }
 
+    #[must_use]
     pub fn name_hash_version(&self) -> NameHashVersion {
         self.name_hash_version
     }
 
+    #[must_use]
     pub fn archive_hash(&self) -> Option<u64> {
         self.archive_hash
     }
 
+    #[must_use]
     pub fn dependencies(&self) -> Option<&[Dependency]> {
         self.dependencies.as_deref()
     }
 
+    #[must_use]
     pub const fn new_wd1_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
@@ -467,6 +478,7 @@ impl FatHeader {
         }
     }
 
+    #[must_use]
     pub const fn new_wd1_win64_sound() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
@@ -479,6 +491,7 @@ impl FatHeader {
         }
     }
 
+    #[must_use]
     pub const fn new_wd1_wiiu() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
@@ -491,6 +504,7 @@ impl FatHeader {
         }
     }
 
+    #[must_use]
     pub const fn new_wd1_wiiu_sound() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
@@ -503,6 +517,7 @@ impl FatHeader {
         }
     }
 
+    #[must_use]
     pub const fn new_wd2_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
@@ -515,6 +530,7 @@ impl FatHeader {
         }
     }
 
+    #[must_use]
     pub const fn new_wd2_ps4() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
@@ -527,6 +543,7 @@ impl FatHeader {
         }
     }
 
+    #[must_use]
     pub const fn new_wd2_sound() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
@@ -539,6 +556,7 @@ impl FatHeader {
         }
     }
 
+    #[must_use]
     pub const fn new_wdl_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
@@ -551,6 +569,7 @@ impl FatHeader {
         }
     }
 
+    #[must_use]
     pub fn new_wdl_win64_london() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
@@ -566,6 +585,7 @@ impl FatHeader {
         }
     }
 
+    #[must_use]
     pub fn new_wdl_win64_london_cache() -> Self {
         Self {
             fat_version: FatVersion::Fat5,

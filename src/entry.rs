@@ -109,6 +109,7 @@ impl CompressionScheme {
         }
     }
 
+    #[must_use]
     pub fn is_supported_for(self, compression_version: CompressionVersion) -> bool {
         self.try_to_scheme_id(compression_version).is_ok()
     }
@@ -465,6 +466,7 @@ impl Entry {
             .map_err(EntryError::Io)
     }
 
+    #[must_use]
     pub fn path(self) -> Cow<'static, Path> {
         if let Some(path) = name_hash_db::get(self.name_hash) {
             Cow::Borrowed(path.as_ref())

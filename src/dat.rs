@@ -29,10 +29,12 @@ pub struct Dat<R: Read + Seek> {
 }
 
 impl<R: Read + Seek> Dat<R> {
+    #[must_use]
     pub fn new(inner: R) -> Self {
         Self { inner }
     }
 
+    #[must_use]
     pub fn into_inner(self) -> R {
         self.inner
     }

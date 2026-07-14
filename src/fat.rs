@@ -82,6 +82,7 @@ pub struct Fat {
 }
 
 impl Fat {
+    #[must_use]
     pub fn new_unchecked(header: FatHeader, mut entries: Vec<Entry>) -> Self {
         let extract_name_hash = |entry: &Entry| entry.name_hash;
         if !entries.is_sorted_by_key(extract_name_hash) {
@@ -167,14 +168,17 @@ impl Fat {
         self.serialize(&mut file).and_then(|()| file.flush())
     }
 
+    #[must_use]
     pub fn into_inner(self) -> (FatHeader, Vec<Entry>) {
         (self.header, self.entries)
     }
 
+    #[must_use]
     pub fn header(&self) -> &FatHeader {
         &self.header
     }
 
+    #[must_use]
     pub fn entries(&self) -> &[Entry] {
         &self.entries
     }
