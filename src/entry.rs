@@ -176,21 +176,12 @@ impl Entry {
     ) -> Result<(), io::Error> {
         buf.reserve(16);
 
-        let name_hash: u32 = self
-            .name_hash
-            .try_into()
-            .expect("validate() should guarantee that name_hash fits into u32");
-        let uncompressed_size: u32 = uncompressed_size
-            .try_into()
-            .expect("validate() should guarantee uncompressed_size fits into u32");
-
         let a = (self.offset << 30) | self.compressed_size;
-        let b = (uncompressed_size << 2) | u32::from(compression_scheme_id);
-        let c = name_hash;
+        let b =
+            (uncompressed_size << 34) | (u64::from(compression_scheme_id) << 32) | self.name_hash;
 
         buf.write_u64::<BE>(a)?;
-        buf.write_u32::<BE>(b)?;
-        buf.write_u32::<BE>(c)?;
+        buf.write_u64::<BE>(b)?;
 
         Ok(())
     }
@@ -248,21 +239,12 @@ impl Entry {
     ) -> Result<(), io::Error> {
         buf.reserve(16);
 
-        let name_hash: u32 = self
-            .name_hash
-            .try_into()
-            .expect("validate() should guarantee that name_hash fits into u32");
-        let uncompressed_size: u32 = uncompressed_size
-            .try_into()
-            .expect("validate() should guarantee uncompressed_size fits into u32");
-
         let a = (self.offset << 29) | self.compressed_size;
-        let b = (uncompressed_size << 3) | u32::from(compression_scheme_id);
-        let c = name_hash;
+        let b =
+            (uncompressed_size << 35) | (u64::from(compression_scheme_id) << 3) | self.name_hash;
 
         buf.write_u64::<BE>(a)?;
-        buf.write_u32::<BE>(b)?;
-        buf.write_u32::<BE>(c)?;
+        buf.write_u64::<BE>(b)?;
 
         Ok(())
     }
