@@ -303,7 +303,7 @@ impl Entry {
 
         let uncompressed_size: u32 = uncompressed_size
             .try_into()
-            .expect("validate() should guarantee uncompressed_size fits into u32");
+            .expect("caller should guarantee uncompressed_size fits into u32");
 
         let a = (uncompressed_size << 2) | u32::from(compression_scheme_id);
         let b = (self.offset << 30) | self.compressed_size;
@@ -427,7 +427,7 @@ impl Entry {
         let compression_scheme_id = self
             .compression_scheme
             .try_to_scheme_id(compression_version)
-            .expect("validate() should guarantee that compression scheme is supported by current compression version");
+            .expect("caller should guarantee that compression scheme is supported by current compression version");
 
         let mut buf = Vec::new();
 
