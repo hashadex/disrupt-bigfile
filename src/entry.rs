@@ -142,7 +142,10 @@ impl Entry {
     const V7_MAX_OFFSET: u64 = 2u64.pow(34);
     const V7_MAX_SIZE: u64 = 2u64.pow(30);
 
-    fn deserialize_v7(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u64, u64), io::Error> {
+    fn deserialize_v7(
+        mut entry_bytes: &[u8],
+        compression_version: CompressionVersion,
+    ) -> Result<Entry, FatDeserializationError> {
         let a = entry_bytes.read_u64::<BE>()?;
         let b = entry_bytes.read_u32::<BE>()?;
         let c = entry_bytes.read_u32::<BE>()?;
@@ -150,16 +153,19 @@ impl Entry {
         let offset = a >> 30;
         let compressed_size = a & 0x3FFF_FFFF;
         let uncompressed_size = (b >> 2).into();
-        let compression_scheme_id = (b & 0b11).try_into().expect("2 bit int should fit into u8");
+        let compression_scheme = CompressionScheme::try_from_scheme_id(
+            (b & 0b11).try_into().expect("2 bit int should fit into u8"),
+            compression_version,
+        )?;
         let name_hash = c.into();
 
-        Ok((
+        Ok(Entry {
             name_hash,
             offset,
-            compression_scheme_id,
+            compression_scheme,
             uncompressed_size,
             compressed_size,
-        ))
+        })
     }
 
     fn serialize_v7(
@@ -206,7 +212,10 @@ impl Entry {
     const V8_MAX_OFFSET: u64 = 2u64.pow(35);
     const V8_MAX_SIZE: u64 = 2u64.pow(29);
 
-    fn deserialize_v8(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u64, u64), io::Error> {
+    fn deserialize_v8(
+        mut entry_bytes: &[u8],
+        compression_version: CompressionVersion,
+    ) -> Result<Entry, FatDeserializationError> {
         let a = entry_bytes.read_u64::<BE>()?;
         let b = entry_bytes.read_u32::<BE>()?;
         let c = entry_bytes.read_u32::<BE>()?;
@@ -214,18 +223,21 @@ impl Entry {
         let offset = a >> 29;
         let compressed_size = a & 0x1FFF_FFFF;
         let uncompressed_size = (b >> 3).into();
-        let compression_scheme_id = (b & 0b111)
-            .try_into()
-            .expect("3 bit int should fit into u8");
+        let compression_scheme = CompressionScheme::try_from_scheme_id(
+            (b & 0b111)
+                .try_into()
+                .expect("3 bit int should fit into u8"),
+            compression_version,
+        )?;
         let name_hash = c.into();
 
-        Ok((
+        Ok(Entry {
             name_hash,
             offset,
-            compression_scheme_id,
+            compression_scheme,
             uncompressed_size,
             compressed_size,
-        ))
+        })
     }
 
     fn serialize_v8(
@@ -273,24 +285,30 @@ impl Entry {
     const V11_V13_MAX_OFFSET: u64 = 2u64.pow(34);
     const V11_V13_MAX_SIZE: u64 = 2u64.pow(30);
 
-    fn deserialize_v11_v13(mut entry_bytes: &[u8]) -> Result<(u64, u64, u8, u64, u64), io::Error> {
+    fn deserialize_v11_v13(
+        mut entry_bytes: &[u8],
+        compression_version: CompressionVersion,
+    ) -> Result<Entry, FatDeserializationError> {
         let a = entry_bytes.read_u32::<BE>()?;
         let b = entry_bytes.read_u64::<BE>()?;
         let c = entry_bytes.read_u64::<BE>()?;
 
         let uncompressed_size = (a >> 2).into();
-        let compression_scheme_id = (a & 0b11).try_into().expect("2 bit int should fit into u8");
+        let compression_scheme = CompressionScheme::try_from_scheme_id(
+            (a & 0b11).try_into().expect("2 bit int should fit into u8"),
+            compression_version,
+        )?;
         let offset = b >> 30;
         let compressed_size = b & 0x3FFF_FFFF;
         let name_hash = c;
 
-        Ok((
+        Ok(Entry {
             name_hash,
             offset,
-            compression_scheme_id,
+            compression_scheme,
             uncompressed_size,
             compressed_size,
-        ))
+        })
     }
 
     fn serialize_v11_v13(
@@ -336,26 +354,16 @@ impl Entry {
             TableVersion::V8 => Self::deserialize_v8,
             TableVersion::V11 | TableVersion::V13 => Self::deserialize_v11_v13,
         };
-        let (name_hash, offset, compression_scheme_id, mut uncompressed_size, compressed_size) =
-            deserializer(&buf)?;
-
-        let compression_scheme =
-            CompressionScheme::try_from_scheme_id(compression_scheme_id, compression_version)?;
+        let mut entry = deserializer(&buf, compression_version)?;
 
         // For some reason, if the entry's compression scheme is None, uncompressed size is set to
         // 0 and compressed size is set to the size of the entry. Let's set both to the same value
         // for convinience.
-        if compression_scheme == CompressionScheme::None {
-            uncompressed_size = compressed_size;
+        if entry.compression_scheme == CompressionScheme::None {
+            entry.uncompressed_size = entry.compressed_size;
         }
 
-        Ok(Self {
-            name_hash,
-            offset,
-            compression_scheme,
-            uncompressed_size,
-            compressed_size,
-        })
+        Ok(entry)
     }
 
     pub fn validate(
