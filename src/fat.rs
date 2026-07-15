@@ -86,7 +86,7 @@ impl Fat {
     pub fn new_unchecked(header: FatHeader, mut entries: Vec<Entry>) -> Self {
         let extract_name_hash = |entry: &Entry| entry.name_hash;
         if !entries.is_sorted_by_key(extract_name_hash) {
-            entries.sort_unstable_by_key(extract_name_hash);
+            entries.sort_by_key(extract_name_hash);
         }
 
         Self { header, entries }
