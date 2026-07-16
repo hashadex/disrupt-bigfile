@@ -104,7 +104,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
 
     pub fn add(
         &mut self,
-        mut data: impl Read,
+        mut input: impl Read,
         relative_entry_path: impl AsRef<Path>,
     ) -> Result<(), PackError> {
         let entry_count: u32 = self
@@ -131,7 +131,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         let offset = self.dat_position;
 
         let copied =
-            io::copy(&mut data, &mut self.dat).inspect_err(|_| self.last_write_failed = true)?;
+            io::copy(&mut input, &mut self.dat).inspect_err(|_| self.last_write_failed = true)?;
         self.dat_position += copied;
 
         let entry = Entry {

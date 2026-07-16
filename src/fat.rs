@@ -107,15 +107,15 @@ impl Fat {
         Ok(Self::new_unchecked(header, entries))
     }
 
-    pub fn deserialize(mut data: impl Read) -> Result<Self, FatDeserializationError> {
-        let header = FatHeader::deserialize(&mut data)?;
+    pub fn deserialize(mut input: impl Read) -> Result<Self, FatDeserializationError> {
+        let header = FatHeader::deserialize(&mut input)?;
 
-        let entry_count = data.read_u32::<LE>()?;
+        let entry_count = input.read_u32::<LE>()?;
         let mut entries = vec::try_with_capacity(entry_count)
             .ok_or(FatDeserializationError::EntryAllocationFailed(entry_count))?;
         for _ in 0..entry_count {
             let entry = Entry::deserialize(
-                &mut data,
+                &mut input,
                 header.table_version(),
                 header.compression_version(),
             )?;

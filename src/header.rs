@@ -263,9 +263,9 @@ pub struct Dependency {
 }
 
 impl Dependency {
-    pub fn deserialize(mut data: impl Read) -> Result<Dependency, io::Error> {
-        let archive_hash = data.read_u64::<LE>()?;
-        let name_hash = data.read_u64::<LE>()?;
+    pub fn deserialize(mut input: impl Read) -> Result<Dependency, io::Error> {
+        let archive_hash = input.read_u64::<LE>()?;
+        let name_hash = input.read_u64::<LE>()?;
 
         Ok(Dependency {
             archive_hash,
@@ -353,14 +353,14 @@ impl FatHeader {
         })
     }
 
-    pub fn deserialize(mut data: impl Read) -> Result<Self, FatDeserializationError> {
-        let fat_version = FatVersion::try_from_magic(data.read_u32::<LE>()?)?;
-        let table_version = TableVersion::try_from(data.read_u32::<LE>()?)?;
+    pub fn deserialize(mut input: impl Read) -> Result<Self, FatDeserializationError> {
+        let fat_version = FatVersion::try_from_magic(input.read_u32::<LE>()?)?;
+        let table_version = TableVersion::try_from(input.read_u32::<LE>()?)?;
 
-        let platform = Platform::try_from_platform_id(data.read_u8()?, fat_version)?;
-        let compression_version = CompressionVersion::try_from(data.read_u8()?)?;
-        let name_hash_version = NameHashVersion::try_from(data.read_u8()?)?;
-        let padding_byte = data.read_u8()?;
+        let platform = Platform::try_from_platform_id(input.read_u8()?, fat_version)?;
+        let compression_version = CompressionVersion::try_from(input.read_u8()?)?;
+        let name_hash_version = NameHashVersion::try_from(input.read_u8()?)?;
+        let padding_byte = input.read_u8()?;
         if padding_byte != 0x00 {
             return Err(FatDeserializationError::UnexpectedPaddingByte(padding_byte));
         }
@@ -368,15 +368,15 @@ impl FatHeader {
         let (archive_hash, dependencies) = match fat_version {
             FatVersion::Fat3 => (None, None),
             FatVersion::Fat5 => {
-                let archive_hash = data.read_u64::<LE>()?;
+                let archive_hash = input.read_u64::<LE>()?;
 
-                let dependency_count = data.read_u32::<LE>()?;
+                let dependency_count = input.read_u32::<LE>()?;
                 let mut dependencies = vec::try_with_capacity(dependency_count).ok_or(
                     FatDeserializationError::DependencyAllocationFailed(dependency_count),
                 )?;
 
                 for _ in 0..dependency_count {
-                    let dependency = Dependency::deserialize(&mut data)?;
+                    let dependency = Dependency::deserialize(&mut input)?;
                     dependencies.push(dependency);
                 }
 

@@ -317,7 +317,7 @@ impl Entry {
     }
 
     pub fn deserialize(
-        mut data: impl Read,
+        mut input: impl Read,
         table_version: TableVersion,
         compression_version: CompressionVersion,
     ) -> Result<Self, FatDeserializationError> {
@@ -327,7 +327,7 @@ impl Entry {
         };
         let mut buf = vec![0; entry_length];
 
-        data.read_exact(&mut buf)?;
+        input.read_exact(&mut buf)?;
 
         buf.reverse();
 
