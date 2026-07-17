@@ -178,6 +178,13 @@ impl Fat {
     }
 
     #[must_use]
+    pub fn into_entries(self) -> Vec<Entry> {
+        let (_, entries) = self.into_inner();
+
+        entries
+    }
+
+    #[must_use]
     pub fn header(&self) -> &FatHeader {
         &self.header
     }
