@@ -12,7 +12,7 @@ use crate::vec;
 
 #[derive(Debug, thiserror::Error)]
 pub enum FatDeserializationError {
-    #[error("io error: {0}")]
+    #[error("io error")]
     Io(#[from] io::Error),
 
     #[error("bad magic 0x{0:X}, expected 0x{FAT3_MAGIC:X} or 0x{FAT5_MAGIC:X}")]
@@ -71,8 +71,12 @@ pub enum FatConstructionError {
     )]
     EntryCountWontFit(usize),
 
-    #[error("error on entry with name hash 0x{:X}: {error}", .entry.name_hash)]
-    Entry { entry: Entry, error: EntryError },
+    #[error("entry with name hash 0x{:X} is not valid", .entry.name_hash)]
+    Entry {
+        entry: Entry,
+        #[source]
+        error: EntryError,
+    },
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

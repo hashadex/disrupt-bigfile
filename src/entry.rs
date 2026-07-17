@@ -11,7 +11,7 @@ use crate::name_hash_db;
 
 #[derive(Debug, thiserror::Error)]
 pub enum EntryError {
-    #[error("io error: {0}")]
+    #[error("io error")]
     Io(#[from] io::Error),
 
     #[error("name hash 0x{hash:X} is too large for current table version (expected 0x{max:X} max)")]

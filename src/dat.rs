@@ -8,16 +8,16 @@ use crate::entry::{CompressionScheme, Entry};
 
 #[derive(Debug, thiserror::Error)]
 pub enum UnpackError {
-    #[error("io error: {0}")]
+    #[error("io error")]
     Io(#[from] io::Error),
 
     #[error("{0} decompression is not supported")]
     DecompressionUnsupported(CompressionScheme),
 
-    #[error("LZ4LW error: {0}")]
+    #[error("lz4lw error")]
     Lz4lw(#[from] lz4lw::Error),
 
-    #[error("XMemCompress error: {0}")]
+    #[error("xmemcompress error")]
     Xmemcompress(#[from] xmemcompress::Error),
 
     #[error("expected to unpack {expected} bytes, but unpacked {actual}")]

@@ -8,27 +8,27 @@ use crate::vec;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("io error: {0}")]
+    #[error("io error")]
     Io(#[from] io::Error),
 
     #[error(
         "can't perform decompression if entry's compressed size ({compressed_size}) is larger than the uncompressed size ({uncompressed_size})"
     )]
-    InvalidEntry {
+    InvalidEntrySizes {
         uncompressed_size: u64,
         compressed_size: u64,
     },
 
-    #[error("failed to allocate output buffer of {0} bytes")]
+    #[error("failed to allocate {0} bytes for the output buffer")]
     OutputBufferAllocationFailed(u64),
 
-    #[error("offset extra byte ({0}) is so large it caused an overflow")]
+    #[error("offset extra byte ({0}) was so large it caused an overflow")]
     OffsetExtraOverflow(u8),
 
     #[error(
-        "offset ({offset}) cannot be larger than the amount of currently decompressed bytes ({max})"
+        "offset ({offset}) was larger than the amount of currently decompressed bytes ({decompressed})"
     )]
-    OffsetTooLarge { offset: usize, max: usize },
+    OffsetTooLarge { offset: usize, decompressed: usize },
 }
 
 impl From<io::ErrorKind> for Error {
@@ -59,7 +59,7 @@ pub(crate) fn decompress_lz4lw(
     entry: Entry,
 ) -> Result<u64, Error> {
     if entry.compressed_size > entry.uncompressed_size {
-        return Err(Error::InvalidEntry {
+        return Err(Error::InvalidEntrySizes {
             uncompressed_size: entry.uncompressed_size,
             compressed_size: entry.compressed_size,
         });
@@ -122,7 +122,7 @@ pub(crate) fn decompress_lz4lw(
         if offset > out_buf.len() {
             return Err(Error::OffsetTooLarge {
                 offset,
-                max: out_buf.len(),
+                decompressed: out_buf.len(),
             });
         }
 

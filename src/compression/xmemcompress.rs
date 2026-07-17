@@ -18,7 +18,7 @@ pub struct ChunkDecompressionError(lzxd::DecompressError);
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("io error: {0}")]
+    #[error("io error")]
     Io(#[from] io::Error),
 
     #[error("bad magic 0x{0:X} in header, expected 0x{XMEMCOMPRESS_LZXNATIVE_SIGNATURE:X}")]
@@ -36,7 +36,7 @@ pub enum Error {
     #[error("unknown flags 0x{0:X}, expected 0x{XMEMCOMPRESS_FLAGS:X}")]
     UnknownFlags(u32),
 
-    #[error("window size {0} is unsupported by lzxd")]
+    #[error("window size {0} is not supported")]
     UnsupportedWindowSize(u32),
 
     #[error(
@@ -50,7 +50,7 @@ pub enum Error {
     #[error("failed to allocate compressed chunk buffer of {0} bytes")]
     CompressedChunkBufferAllocationFailed(u32),
 
-    #[error("failed to decompress chunk: {0}")]
+    #[error("failed to decompress chunk")]
     ChunkDecompression(#[from] ChunkDecompressionError),
 }
 

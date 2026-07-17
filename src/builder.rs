@@ -13,16 +13,16 @@ use crate::header::{FatHeader, FatVersion};
 
 #[derive(Debug, thiserror::Error)]
 pub enum PackError {
-    #[error("io error: {0}")]
+    #[error("io error")]
     Io(#[from] io::Error),
 
-    #[error("entry error: {0}")]
+    #[error("failed to create an entry")]
     Entry(#[from] EntryError),
 
     #[error("can't add more than {} entries", u32::MAX)]
     TableIsFull,
 
-    #[error("can't compute name hash for invalid special path {0}")]
+    #[error("can't compute name hash for invalid special path '{0}'")]
     InvalidSpecialPath(PathBuf),
 }
 
