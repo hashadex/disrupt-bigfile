@@ -604,15 +604,23 @@ impl FatHeader {
 
 impl fmt::Display for FatHeader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}, Table {}, Platform {}, Compression {}, Name hash {}",
-            self.fat_version,
-            self.table_version,
-            self.platform,
-            self.compression_version,
-            self.name_hash_version,
-        )?;
+        if f.alternate() {
+            writeln!(f, "FAT version:         {}", self.fat_version)?;
+            writeln!(f, "Table version:       {}", self.table_version)?;
+            writeln!(f, "Platform:            {}", self.platform)?;
+            writeln!(f, "Compression version: {}", self.compression_version)?;
+            writeln!(f, "Name hash version:   {}", self.name_hash_version)?;
+        } else {
+            write!(
+                f,
+                "{}, Table {}, Platform {}, Compression {}, Name hash {}",
+                self.fat_version,
+                self.table_version,
+                self.platform,
+                self.compression_version,
+                self.name_hash_version,
+            )?;
+        }
 
         if self.fat_version == FatVersion::Fat5 {
             let archive_hash = self
@@ -620,19 +628,21 @@ impl fmt::Display for FatHeader {
                 .expect("constructor should guarantee that archive hash is present on FAT5");
             let dependencies = self
                 .dependencies()
-                .expect("constructor should guarantee that dependencies are present on FAT5");
+                .expect("constructor should guarantee that dependencies are present on FAT5")
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<String>>()
+                .join(", ");
 
-            write!(f, ", Archive hash {archive_hash:#X}, Dependencies [")?;
-
-            for (index, dependency) in dependencies.iter().enumerate() {
-                if index != 0 {
-                    write!(f, ", ")?;
-                }
-
-                write!(f, "({dependency})")?;
+            if f.alternate() {
+                writeln!(f, "Archive hash:        {archive_hash:#X}")?;
+                writeln!(f, "Dependencies:        [{dependencies}]")?;
+            } else {
+                write!(
+                    f,
+                    ", Archive hash {archive_hash:#X}, Dependencies [{dependencies}]"
+                )?;
             }
-
-            write!(f, "]")?;
         }
 
         Ok(())
