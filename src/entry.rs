@@ -470,14 +470,17 @@ impl Entry {
 
 impl fmt::Display for Entry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}B ", self.uncompressed_size)?;
-        if self.compression_scheme != CompressionScheme::None {
-            write!(
-                f,
-                "({}B {}) ",
-                self.compressed_size, self.compression_scheme
-            )?;
+        if f.alternate() {
+            write!(f, "{}B ", self.uncompressed_size)?;
+            if self.compression_scheme != CompressionScheme::None {
+                write!(
+                    f,
+                    "({}B {}) ",
+                    self.compressed_size, self.compression_scheme
+                )?;
+            }
+            write!(f, "@ {:#X}: ", self.offset)?;
         }
-        write!(f, "@ {:#X}: {}", self.offset, self.path().display())
+        write!(f, "{}", self.path().display())
     }
 }
