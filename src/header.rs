@@ -285,7 +285,7 @@ impl fmt::Display for Dependency {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Archive hash 0x{:X}, Name hash 0x{:X}",
+            "Archive hash {:#X}, Name hash {:#X}",
             self.archive_hash, self.name_hash
         )
     }
@@ -622,7 +622,7 @@ impl fmt::Display for FatHeader {
                 .dependencies()
                 .expect("constructor should guarantee that dependencies are present on FAT5");
 
-            write!(f, ", Archive hash 0x{archive_hash:X}, Dependencies [")?;
+            write!(f, ", Archive hash {archive_hash:#X}, Dependencies [")?;
 
             for (index, dependency) in dependencies.iter().enumerate() {
                 if index != 0 {

@@ -21,19 +21,19 @@ pub enum Error {
     #[error("io error")]
     Io(#[from] io::Error),
 
-    #[error("bad magic 0x{0:X} in header, expected 0x{XMEMCOMPRESS_LZXNATIVE_SIGNATURE:X}")]
+    #[error("bad magic {0:#X} in header, expected {XMEMCOMPRESS_LZXNATIVE_SIGNATURE:#X}")]
     BadMagic(u32),
 
-    #[error("unknown version 0x{0:X} in header, expected 0x{XMEMCOMPRESS_VERSION:X}")]
+    #[error("unknown version {0:#X} in header, expected {XMEMCOMPRESS_VERSION:#X}")]
     UnknownVersion(u16),
 
-    #[error("unexpected data 0x{0:X} in reserved, expected 0x{XMEMCOMPRESS_RESERVED:X}")]
+    #[error("unexpected data {0:#X} in reserved, expected {XMEMCOMPRESS_RESERVED:#X}")]
     UnexpectedReserved(u16),
 
-    #[error("unknown context flags 0x{0:X}, expected 0x{XMEMCOMPRESS_CONTEXT_FLAGS:X}")]
+    #[error("unknown context flags {0:#X}, expected {XMEMCOMPRESS_CONTEXT_FLAGS:#X}")]
     UnknownContextFlags(u32),
 
-    #[error("unknown flags 0x{0:X}, expected 0x{XMEMCOMPRESS_FLAGS:X}")]
+    #[error("unknown flags {0:#X}, expected {XMEMCOMPRESS_FLAGS:#X}")]
     UnknownFlags(u32),
 
     #[error("window size {0} is not supported")]

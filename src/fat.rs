@@ -15,7 +15,7 @@ pub enum FatDeserializationError {
     #[error("io error")]
     Io(#[from] io::Error),
 
-    #[error("bad magic 0x{0:X}, expected 0x{FAT3_MAGIC:X} or 0x{FAT5_MAGIC:X}")]
+    #[error("bad magic {0:#X}, expected {FAT3_MAGIC:#X} or {FAT5_MAGIC:#X}")]
     BadMagic(u32),
 
     #[error("unknown table version {0}")]
@@ -33,7 +33,7 @@ pub enum FatDeserializationError {
     #[error("unknown name hash version {0}")]
     UnknownNameHashVersion(u8),
 
-    #[error("unexpected padding byte 0x{0:X}, expected 0x00")]
+    #[error("unexpected padding byte {0:#X}, expected 0x00")]
     UnexpectedPaddingByte(u8),
 
     #[error("failed to allocate memory for {0} dependencies")]
@@ -71,7 +71,7 @@ pub enum FatConstructionError {
     )]
     EntryCountWontFit(usize),
 
-    #[error("entry with name hash 0x{:X} is not valid", .entry.name_hash)]
+    #[error("entry with name hash {:#X} is not valid", .entry.name_hash)]
     Entry {
         entry: Entry,
         #[source]

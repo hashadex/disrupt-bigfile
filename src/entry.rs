@@ -14,10 +14,10 @@ pub enum EntryError {
     #[error("io error")]
     Io(#[from] io::Error),
 
-    #[error("name hash 0x{hash:X} is too large for current table version (expected 0x{max:X} max)")]
+    #[error("name hash {hash:#X} is too large for current table version (expected {max:#X} max)")]
     NameHashWontFit { hash: u64, max: u64 },
 
-    #[error("offset 0x{offset:X} is too large for current table version (expected 0x{max:X} max)")]
+    #[error("offset {offset:#X} is too large for current table version (expected {max:#X} max)")]
     OffsetWontFit { offset: u64, max: u64 },
 
     #[error(
@@ -478,6 +478,6 @@ impl fmt::Display for Entry {
                 self.compressed_size, self.compression_scheme
             )?;
         }
-        write!(f, "@ 0x{:X}: {}", self.offset, self.path().display())
+        write!(f, "@ {:#X}: {}", self.offset, self.path().display())
     }
 }
