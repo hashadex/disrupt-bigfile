@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
-
+use disrupt_bigfile::dat::Dat;
 use disrupt_bigfile::fat::Fat;
+use indicatif::ProgressIterator;
 
 fn open_fat(path: impl AsRef<Path>) -> anyhow::Result<Fat> {
     let path = path.as_ref();
@@ -106,10 +107,94 @@ fn list(args: ListArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Args, Debug)]
+#[group(required = true)]
+struct ArchivePaths {
+    /// Path to a FAT file
+    ///
+    /// Will be inferred from the DAT file path if missing.
+    #[arg(short, long = "fat")]
+    fat_path: Option<PathBuf>,
+
+    /// Path to a DAT file
+    ///
+    /// Will be inferred from the FAT file path if missing.
+    #[arg(short, long = "dat")]
+    dat_path: Option<PathBuf>,
+}
+
+/// Extract all files from a BigFile archive to a directory
+///
+/// This command will deserialize all file entries from the given FAT file and use the information
+/// from those entries to locate each file's contents in the DAT and extract them.
+///
+/// It is not necessary to specify both the --fat and --dat flags. If only one file is specified,
+/// the program will try to find the other one in the same directory.
+///
+/// Due to the fact that BigFile archives store only the filename hash of each entry instead of
+/// their actual names, the program uses its internal name hash source database to look up entries'
+/// filenames by their name hashes. If an entry with a name hash that is not present in the
+/// database is encountered, it will be placed into the "__UNKNOWN" directory, like Gibbed.Disrupt
+/// does.
+#[derive(Args, Debug)]
+struct UnpackArgs {
+    #[command(flatten)]
+    paths: ArchivePaths,
+
+    /// Path to the output directory
+    ///
+    /// The specified directory will be automatically created if it does not exist.
+    ///
+    /// If this flag is missing, the program will unpack the files to a subdirectory created in
+    /// the current working directory.
+    #[arg(short, long = "output")]
+    output_dir: Option<PathBuf>,
+}
+
+fn unpack(args: UnpackArgs) -> anyhow::Result<()> {
+    let fat_path = args.paths.fat_path.unwrap_or_else(|| {
+        args.paths
+            .dat_path
+            .as_ref()
+            .expect("clap should guarantee that at least one arg from the group is present")
+            .with_extension("fat")
+    });
+    let dat_path = args
+        .paths
+        .dat_path
+        .unwrap_or_else(|| fat_path.with_extension("dat"));
+    let output_dir = args
+        .output_dir
+        .as_deref()
+        .or_else(|| fat_path.file_stem().map(Path::new))
+        .unwrap_or("output".as_ref());
+
+    eprintln!(
+        "Unpacking archive to directory '{}' from...",
+        output_dir.display()
+    );
+    eprintln!("\tFAT: '{}'", fat_path.display());
+    eprintln!("\tDAT: '{}'\n", dat_path.display());
+
+    let fat = open_fat(&fat_path)?;
+    let (header, entries) = fat.into_inner();
+    eprintln!("FAT info: {header}");
+
+    let mut dat = Dat::open(&dat_path)
+        .with_context(|| format!("failed to open DAT from '{}'", dat_path.display()))?;
+
+    for (entry, result) in dat.unpack_to_dir_iter(entries, output_dir).progress() {
+        result.with_context(|| format!("failed to unpack '{}'", entry.path().display()))?;
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Subcommand)]
 enum Command {
     Info(InfoArgs),
     List(ListArgs),
+    Unpack(UnpackArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -125,5 +210,6 @@ fn main() -> anyhow::Result<()> {
     match args.command {
         Command::Info(args) => info(args).or_else(suppress_broken_pipe),
         Command::List(args) => list(args).or_else(suppress_broken_pipe),
+        Command::Unpack(args) => unpack(args),
     }
 }
