@@ -1,11 +1,20 @@
+use std::ffi::OsStr;
+use std::fs;
 use std::io::{self, Write};
+use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
 
-use anyhow::Context;
-use clap::{Args, Parser, Subcommand};
+use anyhow::{Context, anyhow, ensure};
+use clap::builder::NonEmptyStringValueParser;
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use disrupt_bigfile::builder::ArchiveBuilder;
 use disrupt_bigfile::dat::Dat;
 use disrupt_bigfile::fat::Fat;
-use indicatif::ProgressIterator;
+use disrupt_bigfile::header::{
+    CompressionVersion, Dependency, FatHeader, FatVersion, NameHashVersion, Platform, TableVersion,
+};
+use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
+use walkdir::WalkDir;
 
 fn open_fat(path: impl AsRef<Path>) -> anyhow::Result<Fat> {
     let path = path.as_ref();
@@ -190,11 +199,216 @@ fn unpack(args: UnpackArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Debug, ValueEnum)]
+enum HeaderPreset {
+    Wd1Win64,
+    Wd1Win64Sound,
+    Wd1WiiU,
+    Wd1WiiUSound,
+    Wd2Win64,
+    Wd2Ps4,
+    Wd2Sound,
+    WdlWin64,
+    WdlWin64London,
+    WdlWin64LondonCache,
+}
+
+impl From<HeaderPreset> for FatHeader {
+    fn from(preset: HeaderPreset) -> Self {
+        match preset {
+            HeaderPreset::Wd1Win64 => Self::new_wd1_win64(),
+            HeaderPreset::Wd1Win64Sound => Self::new_wd1_win64_sound(),
+            HeaderPreset::Wd1WiiU => Self::new_wd1_wiiu(),
+            HeaderPreset::Wd1WiiUSound => Self::new_wd1_wiiu_sound(),
+            HeaderPreset::Wd2Win64 => Self::new_wd2_win64(),
+            HeaderPreset::Wd2Ps4 => Self::new_wd2_ps4(),
+            HeaderPreset::Wd2Sound => Self::new_wd2_sound(),
+            HeaderPreset::WdlWin64 => Self::new_wdl_win64(),
+            HeaderPreset::WdlWin64London => Self::new_wdl_win64_london(),
+            HeaderPreset::WdlWin64LondonCache => Self::new_wdl_win64_london_cache(),
+        }
+    }
+}
+
+fn hex_u64_parser(source: &str) -> Result<u64, ParseIntError> {
+    u64::from_str_radix(source, 16)
+}
+
+fn dependency_parser(source: &str) -> anyhow::Result<Dependency> {
+    let parts = source
+        .split(':')
+        .map(|part| {
+            hex_u64_parser(part)
+                .map_err(|err| anyhow!("failed to parse a hexadecimal number from '{part}': {err}"))
+        })
+        .collect::<anyhow::Result<Vec<u64>>>()?;
+    ensure!(
+        parts.len() == 2,
+        "expected two colon-separated hexadecimal values"
+    );
+
+    let archive_hash = parts[0];
+    let name_hash = parts[1];
+
+    Ok(Dependency {
+        archive_hash,
+        name_hash,
+    })
+}
+
+#[derive(Args, Debug)]
+struct PackArgs {
+    input_dir: PathBuf,
+
+    #[arg(short, long = "output", default_value = ".")]
+    output_dir: PathBuf,
+
+    #[arg(short = 'N', long = "name", value_parser = NonEmptyStringValueParser::new())]
+    archive_name: Option<String>,
+
+    #[arg(short = 'P', long, default_value = "wd1-win64")]
+    preset: HeaderPreset,
+
+    #[arg(short, long)]
+    fat_version: Option<FatVersion>,
+
+    #[arg(short, long)]
+    table_version: Option<TableVersion>,
+
+    #[arg(short, long)]
+    platform: Option<Platform>,
+
+    #[arg(short, long)]
+    compression_version: Option<CompressionVersion>,
+
+    #[arg(short, long)]
+    name_hash_version: Option<NameHashVersion>,
+
+    #[arg(short, long, value_parser = hex_u64_parser)]
+    archive_hash: Option<u64>,
+
+    #[arg(
+        short,
+        long = "dependency",
+        value_parser = dependency_parser,
+        value_name = "ARCHIVE_HASH:NAME_HASH"
+    )]
+    dependencies: Option<Vec<Dependency>>,
+}
+
+fn pack(args: PackArgs) -> anyhow::Result<()> {
+    let preset: FatHeader = args.preset.into();
+    let fat_version = args.fat_version.unwrap_or(preset.fat_version());
+    let table_version = args.table_version.unwrap_or(preset.table_version());
+    let platform = args.platform.unwrap_or(preset.platform());
+    let compression_version = args
+        .compression_version
+        .unwrap_or(preset.compression_version());
+    let name_hash_version = args.name_hash_version.unwrap_or(preset.name_hash_version());
+
+    let fat_header = match fat_version {
+        FatVersion::Fat3 => {
+            if args.archive_hash.is_some() {
+                eprintln!("Warning: archive hash is ignored as it is not supported for FAT3");
+            }
+            if args.dependencies.is_some() {
+                eprintln!("Warning: dependencies are ignored as they are not supported for FAT3");
+            }
+
+            FatHeader::new_fat3(
+                table_version,
+                platform,
+                compression_version,
+                name_hash_version,
+            )
+        }
+        FatVersion::Fat5 => {
+            let archive_hash = args
+                .archive_hash
+                .or(preset.archive_hash())
+                .unwrap_or(0xFFFF_FFFF_FFFF_FFFF);
+            let dependencies = args
+                .dependencies
+                .or(preset.dependencies().map(Vec::from))
+                .unwrap_or_default();
+
+            FatHeader::new_fat5(
+                table_version,
+                platform,
+                compression_version,
+                name_hash_version,
+                archive_hash,
+                dependencies,
+            )
+            .context("invalid FAT header configuration")?
+        }
+    };
+
+    let input_dir = args.input_dir.canonicalize().with_context(|| {
+        format!(
+            "failed to access the input directory at '{}'",
+            args.input_dir.display()
+        )
+    })?;
+    let output_dir = fs::create_dir_all(&args.output_dir)
+        .and_then(|()| args.output_dir.canonicalize())
+        .with_context(|| {
+            format!(
+                "failed to access the output directory at {}",
+                args.output_dir.display()
+            )
+        })?;
+    let archive_name = args
+        .archive_name
+        .as_ref()
+        .map(OsStr::new)
+        .or(input_dir.file_name())
+        .unwrap_or("packed".as_ref());
+
+    let outfile_base_path = output_dir.join(archive_name);
+    let fat_path = outfile_base_path.with_added_extension("fat");
+    let dat_path = outfile_base_path.with_added_extension("dat");
+
+    eprintln!("Packing directory '{}' to...", input_dir.display());
+    eprintln!("\tFAT: '{}'", fat_path.display());
+    eprintln!("\tDAT: '{}'\n", dat_path.display());
+    eprintln!("FAT info: {fat_header}");
+
+    let mut builder =
+        ArchiveBuilder::create(fat_header, &dat_path).context("failed to create the DAT")?;
+
+    let bar = ProgressBar::no_length().with_style(
+        ProgressStyle::with_template("{spinner} Packed files: {pos}")
+            .expect("hardcoded template should always be valid"),
+    );
+    for entry_result in WalkDir::new(&input_dir).into_iter().progress_with(bar) {
+        let entry = entry_result.context("failed to walk the input directory")?;
+        let path = entry.path();
+        if entry.file_type().is_dir() || path == dat_path {
+            continue;
+        }
+
+        let relative_entry_path = path
+            .strip_prefix(&input_dir)
+            .expect("walkdir should guarantee that path always starts with input_dir");
+        builder
+            .add_file(&input_dir, relative_entry_path)
+            .with_context(|| format!("failed to add file '{}'", path.display()))?;
+    }
+
+    let fat = builder.finish().context("failed to flush the DAT file")?;
+    fat.create(fat_path)
+        .context("failed to serialize the FAT file")?;
+
+    Ok(())
+}
+
 #[derive(Debug, Subcommand)]
 enum Command {
     Info(InfoArgs),
     List(ListArgs),
     Unpack(UnpackArgs),
+    Pack(PackArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -211,5 +425,6 @@ fn main() -> anyhow::Result<()> {
         Command::Info(args) => info(args).or_else(suppress_broken_pipe),
         Command::List(args) => list(args).or_else(suppress_broken_pipe),
         Command::Unpack(args) => unpack(args),
+        Command::Pack(args) => pack(args),
     }
 }
