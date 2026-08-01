@@ -33,24 +33,18 @@ fn suppress_broken_pipe(error: anyhow::Error) -> anyhow::Result<()> {
     }
 }
 
-/// Print the metadata of a FAT
+/// Show the metadata of one or more FAT files.
 ///
-/// Display the information stored in the header of one or more FAT files, such as:
-///
-/// * FAT version
-/// * Table version
-/// * Platform
-/// * Compression version
-/// * Name hash version
-/// * Archive hash and dependencies (FAT5 only)
+/// Print the FAT version, table version, platform, compression version, name hash version of the
+/// specified FAT files to stdout. The archive hash and dependencies will also be printed for FAT5
+/// archives.
 #[derive(Args, Debug)]
-#[command(verbatim_doc_comment)]
 struct InfoArgs {
-    /// Path to a FAT file
+    /// Path to the FAT file.
     #[arg(required = true, value_name = "FAT_PATH")]
     fat_paths: Vec<PathBuf>,
 
-    /// Show info in a compact, one line view
+    /// Print the information in a compact format, one line per FAT file.
     #[arg(short, long)]
     short: bool,
 }
@@ -74,18 +68,20 @@ fn info(args: InfoArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Print the filename of each entry in a FAT
+/// Show the entries of one or more FAT files.
 ///
-/// Display the source of each entry's name hash by querying the internal name hash database. If an
-/// entry with an unknown name hash is encountered, a filename in the form of
-/// "__UNKNOWN/<NAME_HASH>" will be displayed instead.
+/// Print the filename (or the name hash, if the filename could not be resolved) of each entry of
+/// each given FAT file to stdout.
+///
+/// If multiple FAT files are specified, the entries will be printed out in blocks, similarly to
+/// what the `ls` command on Linux does.
 #[derive(Args, Debug)]
 struct ListArgs {
-    /// Path to a FAT file
+    /// Path to the FAT file.
     #[arg(required = true, value_name = "FAT_PATH")]
     fat_paths: Vec<PathBuf>,
 
-    /// Also display each entry's compressed and uncompressed sizes, compression scheme and offset
+    /// Also print each entry's compressed and uncompressed sizes, compression scheme and offset.
     #[arg(short, long)]
     verbose: bool,
 }
@@ -119,43 +115,39 @@ fn list(args: ListArgs) -> anyhow::Result<()> {
 #[derive(Args, Debug)]
 #[group(required = true)]
 struct ArchivePaths {
-    /// Path to a FAT file
-    ///
-    /// Will be inferred from the DAT file path if missing.
+    /// Path to the FAT file.
     #[arg(short, long = "fat")]
     fat_path: Option<PathBuf>,
 
-    /// Path to a DAT file
-    ///
-    /// Will be inferred from the FAT file path if missing.
+    /// Path to the DAT file.
     #[arg(short, long = "dat")]
     dat_path: Option<PathBuf>,
 }
 
-/// Extract all files from a BigFile archive to a directory
+/// Extract all files from a BigFile archive to a directory.
 ///
-/// This command will deserialize all file entries from the given FAT file and use the information
-/// from those entries to locate each file's contents in the DAT and extract them.
+/// Decompress and copy every file stored in the given BigFile archive (FAT+DAT file pair) to the
+/// given destination.
 ///
 /// It is not necessary to specify both the --fat and --dat flags. If only one file is specified,
 /// the program will try to find the other one in the same directory.
 ///
-/// Due to the fact that BigFile archives store only the filename hash of each entry instead of
-/// their actual names, the program uses its internal name hash source database to look up entries'
-/// filenames by their name hashes. If an entry with a name hash that is not present in the
-/// database is encountered, it will be placed into the "__UNKNOWN" directory, like Gibbed.Disrupt
-/// does.
+/// For compatibility with Gibbed.Disrupt, any files for which the filename could not be resolved
+/// due to them having an unknown name hash will be placed into the special "__UNKNOWN" directory.
+/// However, unlike Gibbed.Disrupt, this program will not extract files with a duplicate name hash
+/// separately. If multiple entries represent some file in the FAT, only the last occurence of that
+/// file will actually be extracted, and all other duplicates of that file will be ignored.
 #[derive(Args, Debug)]
 struct UnpackArgs {
     #[command(flatten)]
     paths: ArchivePaths,
 
-    /// Path to the output directory
+    /// Path to the destination directory.
     ///
-    /// The specified directory will be automatically created if it does not exist.
+    /// This directory will be automatically created if it does not exist.
     ///
-    /// If this flag is missing, the program will unpack the files to a subdirectory created in
-    /// the current working directory.
+    /// If this flag is missing, the program will automatically create a subdirectory in the
+    /// current working directory and extract the files there.
     #[arg(short, long = "output")]
     output_dir: Option<PathBuf>,
 }
@@ -201,15 +193,34 @@ fn unpack(args: UnpackArgs) -> anyhow::Result<()> {
 
 #[derive(Clone, Debug, ValueEnum)]
 enum HeaderPreset {
+    /// All archives except for "sound*" in the Windows release of WD1.
     Wd1Win64,
+
+    /// "sound*" archives in the Windows release of WD1.
     Wd1Win64Sound,
+
+    /// All archives except for "sound*" in the Wii U release of WD1.
     Wd1WiiU,
+
+    /// "sound*" archives in the Wii U release of WD1.
     Wd1WiiUSound,
+
+    /// All archives except for "sound*" in the Windows release of WD2.
     Wd2Win64,
+
+    /// All archives except for "sound*" in the PS4 release of WD2.
     Wd2Ps4,
+
+    /// "sound*" archives in WD2.
     Wd2Sound,
+
+    /// All archives except for "london" and "london_cache" in the Windows release of WDL.
     WdlWin64,
+
+    /// "worlds/london/london" archive in the Windows release of WDL.
     WdlWin64London,
+
+    /// "worlds/london/london_cache" archive in the Windows release of WDL.
     WdlWin64LondonCache,
 }
 
@@ -256,37 +267,84 @@ fn dependency_parser(source: &str) -> anyhow::Result<Dependency> {
     })
 }
 
+/// Create a new BigFile archive from a directory.
+///
+/// Recursively add all files in a given input directory to a new BigFile archive
+/// (FAT+DAT file pair). The new files will be created with the given name and placed into the
+/// specified destination directory.
+///
+/// You can use the provided FAT metadata presets to easily modify archives for most releases of
+/// the games, and use flags like `--platform`, `--table-version`, etc. to override the fields from
+/// the preset.
+///
+/// For compatibility with Gibbed.Disrupt, the files in the "__UNKNOWN" and "__DUPLICATE"
+/// subdirectories will be processed in a special way. Files in the "__UNKNOWN" directory will have
+/// their name hashes read verbatim as a hexadecimal number from their filenames. Files in the
+/// "__DUPLICATE" directory will have the "__DUPLICATE_<number>" suffix removed from their file
+/// stems, although the number in the prefix will not be respected -- "__DUPLICATE" files may
+/// appear in any order in the created FAT file. That way any mod that was meant to be installed
+/// with Gibbed.Disrupt can be installed with disrupt-bigfile, and vice versa.
 #[derive(Args, Debug)]
 struct PackArgs {
+    /// Path to the directory to be packed.
     input_dir: PathBuf,
 
+    /// Path to the directory where the FAT and DAT files will be created.
+    ///
+    /// This directory will be created if it does not exist.
     #[arg(short, long = "output", default_value = ".")]
     output_dir: PathBuf,
 
+    /// Name of the created FAT and DAT files.
     #[arg(short = 'N', long = "name", value_parser = NonEmptyStringValueParser::new())]
     archive_name: Option<String>,
 
+    /// Preset for the FAT metadata fields.
+    ///
+    /// Fields from the preset will be overridden by flags like `--platform`, `--table-version` and
+    /// other.
     #[arg(short = 'P', long, default_value = "wd1-win64")]
     preset: HeaderPreset,
 
+    /// Version/type of the FAT file.
     #[arg(short, long)]
     fat_version: Option<FatVersion>,
 
+    /// Version of the binary format of the FAT file's body.
     #[arg(short, long)]
     table_version: Option<TableVersion>,
 
+    /// Target platform of the archive.
     #[arg(short, long)]
     platform: Option<Platform>,
 
-    #[arg(short, long)]
+    /// Compression version.
+    ///
+    /// Affects which compression schemes can be used in the archive.
+    #[arg(short, long, verbatim_doc_comment)]
     compression_version: Option<CompressionVersion>,
 
+    /// Name hash version.
     #[arg(short, long)]
     name_hash_version: Option<NameHashVersion>,
 
+    /// Archive hash.
+    ///
+    /// Specified as a 64-bit hexadecimal number, for example "--archive-hash A7E2977F3F32B98E".
+    ///
+    /// Supported only on FAT5 and will be ignored if used when creating a FAT3 archive.
     #[arg(short, long, value_parser = hex_u64_parser)]
     archive_hash: Option<u64>,
 
+    /// Add a dependency entry to the metadata.
+    ///
+    /// A dependency is specified as two hexadecimal numbers, the dependency archive hash and the
+    /// name hash, separated by a colon; for example
+    /// "--dependency B78228C0B350CC14:BE38E2B5954E5FA4".
+    ///
+    /// Supported only on FAT5 and will be ignored if used when creating a FAT3 archive.
+    ///
+    /// This flag can be used multiple times to add multiple dependencies.
     #[arg(
         short,
         long = "dependency",
@@ -403,6 +461,8 @@ fn pack(args: PackArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Extract, create and inspect BigFile archives used by Disrupt, Ubisoft's game engine for the
+/// Watch Dogs games.
 #[derive(Debug, Subcommand)]
 enum Command {
     Info(InfoArgs),

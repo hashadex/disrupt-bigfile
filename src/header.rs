@@ -12,9 +12,11 @@ pub const FAT5_MAGIC: u32 = 0x4641_5435;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum FatVersion {
+    /// Used in Watch Dogs 1.
     #[value(name = "v3")]
     Fat3,
 
+    /// Used in Watch Dogs 2 and Legion.
     #[value(name = "v5")]
     Fat5,
 }
@@ -49,8 +51,14 @@ impl fmt::Display for FatVersion {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum TableVersion {
     V7,
+
+    /// Used in Watch Dogs 1.
     V8,
+
+    /// Used in Watch Dogs 2.
     V11,
+
+    /// Used in Watch Dogs Legion.
     V13,
 }
 
@@ -158,11 +166,21 @@ impl fmt::Display for Platform {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum CompressionVersion {
+    /// Used in WD1 and WD2 for the uncompressed sound archives.
     V0,
+
     V4,
+
+    /// Used for most archives in WD1
     V5,
+
+    /// Used in most archives of the Windows version of WD2
     V6,
+
+    /// Used by all archives of WDL
     V8,
+
+    /// Used in most archives of the PS4 release of WD2
     V9,
 }
 
