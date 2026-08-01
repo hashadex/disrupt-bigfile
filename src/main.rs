@@ -33,9 +33,9 @@ fn suppress_broken_pipe(error: anyhow::Error) -> anyhow::Result<()> {
     }
 }
 
-/// Show the metadata of one or more FAT files.
+/// Show the metadata for one or more FAT files.
 ///
-/// Print the FAT version, table version, platform, compression version, name hash version of the
+/// Print the FAT version, table version, platform, compression version, name hash version for the
 /// specified FAT files to stdout. The archive hash and dependencies will also be printed for FAT5
 /// archives.
 #[derive(Args, Debug)]
@@ -73,8 +73,8 @@ fn info(args: InfoArgs) -> anyhow::Result<()> {
 /// Print the filename (or the name hash, if the filename could not be resolved) of each entry of
 /// each given FAT file to stdout.
 ///
-/// If multiple FAT files are specified, the entries will be printed out in blocks, similarly to
-/// what the `ls` command on Linux does.
+/// If multiple FAT files are specified, the entries will be printed out in blocks, similar to how
+/// the `ls` command on Linux groups output.
 #[derive(Args, Debug)]
 struct ListArgs {
     /// Path to the FAT file.
@@ -135,8 +135,8 @@ struct ArchivePaths {
 /// For compatibility with Gibbed.Disrupt, any files for which the filename could not be resolved
 /// due to them having an unknown name hash will be placed into the special "__UNKNOWN" directory.
 /// However, unlike Gibbed.Disrupt, this program will not extract files with a duplicate name hash
-/// separately. If multiple entries represent some file in the FAT, only the last occurence of that
-/// file will actually be extracted, and all other duplicates of that file will be ignored.
+/// separately. If multiple entries represent some file in the FAT, only the last occurrence of
+/// that file will actually be extracted, and all other duplicates of that file will be ignored.
 #[derive(Args, Debug)]
 struct UnpackArgs {
     #[command(flatten)]
