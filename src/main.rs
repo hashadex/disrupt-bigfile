@@ -185,7 +185,7 @@ fn unpack(args: UnpackArgs) -> anyhow::Result<()> {
         .with_context(|| format!("failed to open DAT from '{}'", dat_path.display()))?;
 
     for (entry, result) in dat.unpack_to_dir_iter(entries, output_dir).progress() {
-        result.with_context(|| format!("failed to unpack '{}'", entry.path().display()))?;
+        result.with_context(|| format!("failed to unpack '{entry}'"))?;
     }
 
     Ok(())
