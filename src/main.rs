@@ -7,12 +7,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, anyhow, ensure};
 use clap::builder::NonEmptyStringValueParser;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use disrupt_bigfile::builder::ArchiveBuilder;
-use disrupt_bigfile::dat::Dat;
-use disrupt_bigfile::fat::Fat;
 use disrupt_bigfile::header::{
     CompressionVersion, Dependency, FatHeader, FatVersion, NameHashVersion, Platform, TableVersion,
 };
+use disrupt_bigfile::{ArchiveBuilder, Dat, Fat};
 use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 use walkdir::WalkDir;
 
