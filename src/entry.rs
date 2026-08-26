@@ -1,3 +1,5 @@
+//! FAT entry serialization and deserialization.
+
 use std::borrow::Cow;
 use std::fmt;
 use std::io::{self, Read, Write};
@@ -9,17 +11,22 @@ use crate::fat::FatDeserializationError;
 use crate::header::{CompressionVersion, TableVersion};
 use crate::name_hash_db;
 
+/// Errors that might happen when validating or serializing an [`Entry`].
 #[derive(Debug, thiserror::Error)]
 pub enum EntryError {
+    /// Failed to write the entry's serialized bytes to an output due to an I/O error.
     #[error("io error")]
     Io(#[from] io::Error),
 
+    /// The selected entry binary layout version does not have enough bits to store the name hash.
     #[error("name hash {hash:#X} is too large for current table version (expected {max:#X} max)")]
     NameHashWontFit { hash: u64, max: u64 },
 
+    /// The selected entry binary layout version does not have enough bits to store the offset.
     #[error("offset {offset:#X} is too large for current table version (expected {max:#X} max)")]
     OffsetWontFit { offset: u64, max: u64 },
 
+    /// The entry's [`CompressionScheme`] is not supported by the selected [`CompressionVersion`].
     #[error(
         "compression scheme {scheme} is not supported by compression version {compression_version}"
     )]
@@ -28,21 +35,68 @@ pub enum EntryError {
         compression_version: CompressionVersion,
     },
 
+    /// The selected entry binary layout version does not have enough bits to store the
+    /// uncompressed size.
     #[error("uncompressed size {size} is too large for current table version (expected {max} max)")]
     UncompressedSizeWontFit { size: u64, max: u64 },
 
+    /// The selected entry binary layout version does not have enough bits to store the compressed
+    /// size.
     #[error("compressed size {size} is too large for current table version (expected {max} max)")]
     CompressedSizeWontFit { size: u64, max: u64 },
 }
 
+/// The compression scheme that was used on the file described by an [`Entry`].
+///
+/// # Scheme IDs
+///
+/// The compression scheme is stored in the form of a binary number ID in the serialized FAT entry.
+/// Each compression scheme's ID is dictated by the archive's [`CompressionVersion`]. This means
+/// that depending on the compression version, some schemes may have different IDs and some
+/// schemes may not have an ID assigned to them at all. In that case, it means that the compression
+/// scheme is not supported by the current compression version.
+///
+/// The table below shows the meaning of each scheme ID on every compression version. Empty cell
+/// means that no compression scheme is assigned to this ID on this compression version.
+///
+/// | ID | V0     | V4      | V5             | V6      | V8      | V9      |
+/// |----|--------|---------|----------------|---------|---------|---------|
+/// | 0  | `None` | `None`  | `None`         | `None`  | `None`  | `None`  |
+/// | 1  |        | `Lzo1x` | `Lzo1x`        | `Lzma`  | `Oodle` | `Oodle` |
+/// | 2  |        | `Zlib`  | `Zlib`         | `Lz4lw` | `Lzma`  | `Lzma`  |
+/// | 3  |        |         | `Xmemcompress` |         | `Lz4lw` | `Lz4lw` |
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CompressionScheme {
+    /// No compression.
+    ///
+    /// Used in Watch Dogs 1, 2 and Legion.
     None,
+
+    /// [LZO1x](https://en.wikipedia.org/wiki/Lempel%E2%80%93Ziv%E2%80%93Oberhumer) compression.
+    ///
+    /// Used in the Wii U version of Watch Dogs 1.
     Lzo1x,
+
+    /// [Zlib](https://en.wikipedia.org/wiki/Zlib) compression.
     Zlib,
+
+    /// XMemCompress compression.
+    ///
+    /// Used in the Windows version of Watch Dogs 1.
     Xmemcompress,
+
+    /// [LZMA](https://en.wikipedia.org/wiki/LZMA) compression.
+    ///
+    /// Used in the PS4 version of Watch Dogs 2.
     Lzma,
+
+    /// LZ4LW compression, which is a slightly modified version of
+    /// [LZ4](https://en.wikipedia.org/wiki/LZ4_(compression_algorithm)).
+    ///
+    /// Used in the Windows version of Watch Dogs 2 and Legion.
     Lz4lw,
+
+    /// [Oodle](https://www.radgametools.com/oodle.htm) compression.
     Oodle,
 }
 
@@ -61,6 +115,34 @@ impl fmt::Display for CompressionScheme {
 }
 
 impl CompressionScheme {
+    /// Creates a compression scheme from its `scheme_id`, which is based on the archive's
+    /// `compression_version`.
+    ///
+    /// See the [Scheme IDs] section of the enum documentation for details.
+    ///
+    /// # Errors
+    ///
+    /// This function will return [`UnknownCompressionScheme`] if the given `scheme_id` is unknown
+    /// or unsupported for the given `compression_version`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use disrupt_bigfile::entry::CompressionScheme;
+    /// use disrupt_bigfile::header::CompressionVersion;
+    ///
+    /// let xmemcompress = CompressionScheme::try_from_scheme_id(3, CompressionVersion::V5);
+    /// std::assert_matches!(xmemcompress, Ok(CompressionScheme::Xmemcompress));
+    ///
+    /// let unsupported = CompressionScheme::try_from_scheme_id(3, CompressionVersion::V0);
+    /// assert!(unsupported.is_err());
+    ///
+    /// let unknown = CompressionScheme::try_from_scheme_id(123, CompressionVersion::V9);
+    /// assert!(unsupported.is_err());
+    /// ```
+    ///
+    /// [Scheme IDs]: Self#scheme-ids
+    /// [`UnknownCompressionScheme`]: FatDeserializationError::UnknownCompressionScheme
     pub fn try_from_scheme_id(
         scheme_id: u8,
         compression_version: CompressionVersion,
@@ -84,6 +166,31 @@ impl CompressionScheme {
         }
     }
 
+    /// Converts this compression scheme to its scheme ID, based on the archive's
+    /// `compression_version`.
+    ///
+    /// See the [Scheme IDs] section of the enum documentation for details.
+    ///
+    /// # Errors
+    ///
+    /// This function will return [`UnsupportedCompressionScheme`] if the given
+    /// `compression_version` does not have an ID for this compression scheme.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use disrupt_bigfile::entry::CompressionScheme;
+    /// use disrupt_bigfile::header::CompressionVersion;
+    ///
+    /// let lz4lw = CompressionScheme::Lz4lw;
+    ///
+    /// std::assert_matches!(lz4lw.try_to_scheme_id(CompressionVersion::V6), Ok(2));
+    /// std::assert_matches!(lz4lw.try_to_scheme_id(CompressionVersion::V8), Ok(3));
+    /// assert!(lz4lw.try_to_scheme_id(CompressionVersion::V0).is_err());
+    /// ```
+    ///
+    /// [Scheme IDs]: Self#scheme-ids
+    /// [`UnsupportedCompressionScheme`]: EntryError::UnsupportedCompressionScheme
     pub fn try_to_scheme_id(
         self,
         compression_version: CompressionVersion,
@@ -109,18 +216,84 @@ impl CompressionScheme {
         }
     }
 
+    /// Checks if `compression_version` has an ID for this compression scheme.
+    ///
+    /// See the [Scheme IDs] section of the enum documentation for details.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use disrupt_bigfile::entry::CompressionScheme;
+    /// use disrupt_bigfile::header::CompressionVersion;
+    ///
+    /// let lzma = CompressionScheme::Lzma;
+    ///
+    /// assert!(lzma.is_supported_for(CompressionVersion::V6));
+    /// assert!(!lzma.is_supported_for(CompressionVersion::V0));
+    /// ```
+    ///
+    /// [Scheme IDs]: Self#scheme-ids
     #[must_use]
     pub fn is_supported_for(self, compression_version: CompressionVersion) -> bool {
         self.try_to_scheme_id(compression_version).is_ok()
     }
 }
 
+/// Information about an archived file.
+///
+/// This struct represents an entry in the index of a FAT file. It contains the information needed
+/// to locate and extract an archived file from a [`Dat`].
+///
+/// `Entry` instances can be constructed manually, deserialized from binary data using
+/// [`Self::deserialize`], or created when adding files to a new archive using [`ArchiveBuilder`].
+///
+/// # Compression and binary format versions TODO TODO TODO
+///
+/// `Entry` instances can be converted to and from a binary format that has multiple versions.
+/// The entry format version used in a FAT file is dictated by the [`TableVersion`] header field.
+///
+/// Every version has a different amount of bits allocated to each field. This means that the same
+/// instance of `Entry` that can be serialized to one version without any problems, may have fields
+/// that are too large for some other version.
+///
+/// Also, not all [`CompressionScheme`]s are supported in an archive. The availability of each
+/// scheme is dictated by the [`CompressionVersion`] header field, see the
+/// [Scheme IDs section of the documentation for `CompressionScheme`](CompressionScheme#scheme-ids).
+///
+/// Use [`Self::validate`] to check if an `Entry` can be serialized to a given format and
+/// compression versions. Use [`Self::serialize`] to validate and serialize at the same time, or
+/// [`Self::serialize_unchecked`] to skip validation if you guarantee that your `Entry` is valid
+/// for the given format version.
+///
+/// [`Dat`]: crate::dat::Dat
+/// [`ArchiveBuilder`]: crate::builder::ArchiveBuilder
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Entry {
+    /// [FNV-1 hash](https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1_hash)
+    /// of the entry's filename.
+    ///
+    /// The hash is 32 or 64 bit, depending on the [`TableVersion`].
+    ///
+    /// Use [`Self::path`] to try to look up the source of this hash.
     pub name_hash: u64,
+
+    /// Offset at which the file's start is located in the DAT.
     pub offset: u64,
+
+    /// Compression scheme that should be used when extracting this file.
     pub compression_scheme: CompressionScheme,
+
+    /// Expected size (in bytes) of the file after decompression.
+    ///
+    /// In the original binary format, if the compression scheme is set to
+    /// [`CompressionScheme::None`], then this field will always be set to 0 and the compressed
+    /// size will be set to the actual size of the file.
+    ///
+    /// For convinience, during deserialization both the compressed and uncompressed size fields
+    /// will be set to the file's size. This behavior will be handled during serialization as well.
     pub uncompressed_size: u64,
+
+    /// Size (in bytes) of the raw, compressed file in the DAT.
     pub compressed_size: u64,
 }
 
@@ -316,6 +489,49 @@ impl Entry {
         Ok(())
     }
 
+    /// Reads some bytes from `input` and constructs a new entry from the binary format according
+    /// to the FAT file's `table_version` and `compression_version`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error in the following cases:
+    ///
+    /// - [`Io`]: failed to read enough bytes due to an I/O error, such as an unexpected EOF, etc.
+    /// - [`UnknownCompressionScheme`]: the compression scheme ID in the binary representation was
+    ///   unknown or not supported by the given `compression_version`.
+    ///
+    /// [`Io`]: FatDeserializationError::Io
+    /// [`UnknownCompressionScheme`]: FatDeserializationError::UnknownCompressionScheme
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::io::Cursor;
+    ///
+    /// use disrupt_bigfile::entry::Entry;
+    /// use disrupt_bigfile::header::{CompressionVersion, TableVersion};
+    ///
+    /// let mut entry_bytes = Cursor::new([
+    ///     // Entry A
+    ///     0xA0, 0x76, 0x94, 0x00, 0x33, 0x5B, 0x22, 0x00, 0xE4, 0xF5, 0x00, 0xE0, 0x89, 0xD6,
+    ///     0x08, 0x00,
+    ///     // Entry B
+    ///     0xA3, 0x1B, 0xC2, 0x00, 0x23, 0x4A, 0x00, 0x00, 0xA2, 0x02, 0x00, 0x20, 0xF4, 0x79,
+    ///     0x06, 0x00,
+    /// ]);
+    ///
+    /// let table_version = TableVersion::V8;
+    /// let compression_version = CompressionVersion::V5;
+    ///
+    /// // You can pass a mutable reference to your reader in order to avoid consuming it and use
+    /// // it multiple times:
+    /// let entry_a = Entry::deserialize(&mut entry_bytes, table_version, compression_version)?;
+    /// let entry_b = Entry::deserialize(&mut entry_bytes, table_version, compression_version)?;
+    ///
+    /// assert_eq!(entry_a.name_hash, 0x9476A0);
+    /// assert_eq!(entry_b.name_hash, 0xC21BA3);
+    /// # Ok::<(), disrupt_bigfile::fat::FatDeserializationError>(())
+    /// ```
     pub fn deserialize(
         mut input: impl Read,
         table_version: TableVersion,
@@ -348,6 +564,45 @@ impl Entry {
         Ok(entry)
     }
 
+    /// Checks if this entry can be correctly serialized to a given `table_version` and
+    /// `compression_version`, returning an [`Ok`] if it is invalid or an [`Err`] containing the
+    /// reason otherwise.
+    ///
+    /// In most cases, you should use [`Self::serialize`] if just you need to validate and
+    /// serialize an entry at the same time.
+    ///
+    /// # Errors
+    ///
+    /// If this entry is invalid, this function will return an [`EntryError`] describing exactly
+    /// what's wrong with it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use disrupt_bigfile::entry::{CompressionScheme, Entry};
+    /// use disrupt_bigfile::header::{CompressionVersion, TableVersion};
+    ///
+    /// let valid_entry = Entry {
+    ///     name_hash: 0xDEAD_BEEF,
+    ///     offset: 0xCAFE_BABE,
+    ///     compression_scheme: CompressionScheme::None,
+    ///     uncompressed_size: 4096,
+    ///     compressed_size: 2048,
+    /// };
+    /// let invalid_entry = Entry {
+    ///     name_hash: u64::MAX,
+    ///     offset: u64::MAX,
+    ///     compression_scheme: CompressionScheme::Lzma,
+    ///     uncompressed_size: u64::MAX,
+    ///     compressed_size: u64::MAX,
+    /// };
+    ///
+    /// let table_version = TableVersion::V8;
+    /// let compression_version = CompressionVersion::V5;
+    ///
+    /// assert!(valid_entry.validate(table_version, compression_version).is_ok());
+    /// assert!(invalid_entry.validate(table_version, compression_version).is_err());
+    /// ```
     pub fn validate(
         self,
         table_version: TableVersion,
@@ -412,6 +667,52 @@ impl Entry {
         Ok(self)
     }
 
+    /// Converts this entry to a binary format according to the FAT file's `table_version` and
+    /// `compression_version` and writes the bytes to `out`, **without validating the entry**.
+    ///
+    /// The caller should guarantee that this entry is valid for the given `table_version` and
+    /// `compression_version`, either manually or using [`Self::validate`]. Violating this
+    /// guarantee is considered a logic error and may lead to invalid outputs or panics. However,
+    /// this function is completely memory safe and will not lead to [undefined behavior] under any
+    /// circumstances.
+    ///
+    /// Use [`Self::serialize`] if you want to validate and serialize the entry at the same time.
+    ///
+    /// [undefined behavior]: https://doc.rust-lang.org/reference/behavior-considered-undefined.html
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if this entry's compression scheme is not supported by the given
+    /// `compression_version` or if any of the fields are too large for the given `table_version`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an I/O error if writing the serialized bytes to `out` fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use disrupt_bigfile::entry::{CompressionScheme, Entry};
+    /// use disrupt_bigfile::header::{CompressionVersion, TableVersion};
+    ///
+    /// let entry = Entry {
+    ///     name_hash: 0xDEAD_BEEF,
+    ///     offset: 0xCAFE_BABE,
+    ///     compression_scheme: CompressionScheme::None,
+    ///     uncompressed_size: 4096,
+    ///     compressed_size: 2048,
+    /// };
+    /// let table_version = TableVersion::V8;
+    /// let compression_version = CompressionVersion::V5;
+    ///
+    /// let mut out = Vec::new();
+    ///
+    /// entry.validate(table_version, compression_version)?
+    ///     .serialize_unchecked(&mut out, table_version, compression_version)?;
+    ///
+    /// assert!(!out.is_empty());
+    /// # Ok::<(), disrupt_bigfile::entry::EntryError>(())
+    /// ```
     pub fn serialize_unchecked(
         self,
         mut out: impl Write,
@@ -445,6 +746,51 @@ impl Entry {
         Ok(())
     }
 
+    /// Validates this entry, converts it to a binary format according to the FAT file's
+    /// `table_version` and `compression_version` and writes the bytes to `out`.
+    ///
+    /// If you are absolutely sure that this entry is valid and want to skip validation performed
+    /// by this function, use the [`Self::serialize_unchecked`] function.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`EntryError::Io`] if it fails to write the serialized bytes
+    /// to `out` due to an I/O error, or other [`EntryError`] variants if this entry could not be
+    /// serialized due to it being invalid for the given `table_version` and `compression_version`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use disrupt_bigfile::entry::{CompressionScheme, Entry};
+    /// use disrupt_bigfile::header::{CompressionVersion, TableVersion};
+    ///
+    /// let entry_a = Entry {
+    ///     name_hash: 0xDEAD_BEEF,
+    ///     offset: 0xCAFE_BABE,
+    ///     compression_scheme: CompressionScheme::None,
+    ///     uncompressed_size: 4096,
+    ///     compressed_size: 2048,
+    /// };
+    /// let entry_b = Entry {
+    ///     name_hash: 0xFEED_FACE,
+    ///     offset: 0xCAFE_FEED,
+    ///     compression_scheme: CompressionScheme::None,
+    ///     uncompressed_size: 16384,
+    ///     compressed_size: 8192,
+    /// };
+    /// let table_version = TableVersion::V8;
+    /// let compression_version = CompressionVersion::V5;
+    ///
+    /// let mut out = Vec::new();
+    ///
+    /// // You can pass a mutable reference to your reader in order to avoid consuming it and use
+    /// // it multiple times:
+    /// entry_a.serialize(&mut out, table_version, compression_version)?;
+    /// entry_b.serialize(&mut out, table_version, compression_version)?;
+    ///
+    /// assert!(!out.is_empty());
+    /// # Ok::<(), disrupt_bigfile::entry::EntryError>(())
+    /// ```
     pub fn serialize(
         self,
         out: impl Write,
@@ -456,6 +802,39 @@ impl Entry {
             .map_err(EntryError::Io)
     }
 
+    /// Tries to find the name of this entry by looking up its [name hash](Self::name_hash).
+    ///
+    /// This function will return a [`Cow::Borrowed`] containing a `'static` reference to the
+    /// entry's file name if it was found, otherwise it will return a [`Cow::Owned`] with a
+    /// placeholder name in the form of `__UNKNOWN/<HEX_NAME_HASH>`
+    /// (for example, `__UNKNOWN/9DFB477E`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::Path;
+    ///
+    /// use disrupt_bigfile::entry::{CompressionScheme, Entry};
+    /// use disrupt_bigfile::header::{CompressionVersion, TableVersion};
+    ///
+    /// let known_entry = Entry {
+    ///     name_hash: 0x2672_724B,
+    ///     offset: 0x5A75607,
+    ///     compression_scheme: CompressionScheme::Xmemcompress,
+    ///     uncompressed_size: 288_650,
+    ///     compressed_size: 58_070,
+    /// };
+    /// let unknown_entry = Entry {
+    ///     name_hash: 0xDEAD_BEEF,
+    ///     offset: 0xCAFE_BABE,
+    ///     compression_scheme: CompressionScheme::None,
+    ///     uncompressed_size: 4096,
+    ///     compressed_size: 2048,
+    /// };
+    ///
+    /// assert_eq!(known_entry.path(), Path::new("credits/pc/credits.xml"));
+    /// assert_eq!(unknown_entry.path(), Path::new("__UNKNOWN/DEADBEEF"));
+    /// ```
     #[must_use]
     pub fn path(self) -> Cow<'static, Path> {
         if let Some(path) = name_hash_db::get(self.name_hash) {
@@ -468,6 +847,29 @@ impl Entry {
     }
 }
 
+/// Displays the entry's name via [`Self::path`]. If the alternate flag (`#`) is specified, the
+/// uncompressed and uncompressed size, compression scheme and offset will also be displayed.
+///
+/// # Examples
+///
+/// ```
+/// use disrupt_bigfile::entry::{CompressionScheme, Entry};
+/// use disrupt_bigfile::header::{CompressionVersion, TableVersion};
+///
+/// let entry = Entry {
+///     name_hash: 0x2672_724B,
+///     offset: 0x5A75607,
+///     compression_scheme: CompressionScheme::Xmemcompress,
+///     uncompressed_size: 288_650,
+///     compressed_size: 58_070,
+/// };
+///
+/// assert_eq!(format!("{entry}"), "credits/pc/credits.xml");
+/// assert_eq!(
+///     format!("{entry:#}"),
+///     "288650B (58070B XMemCompress) @ 0x5A75607: credits/pc/credits.xml"
+/// );
+/// ```
 impl fmt::Display for Entry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if f.alternate() {
