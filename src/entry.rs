@@ -46,7 +46,7 @@ pub enum EntryError {
     CompressedSizeWontFit { size: u64, max: u64 },
 }
 
-/// The compression scheme that was used on the file described by an [`Entry`].
+/// Compression scheme that was used on the file described by an [`Entry`].
 ///
 /// # Scheme IDs
 ///
