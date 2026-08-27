@@ -57,7 +57,7 @@ pub enum EntryError {
 /// scheme is not supported by the current compression version.
 ///
 /// The table below shows the meaning of each scheme ID on every compression version. Empty cell
-/// means that no compression scheme is assigned to this ID on this compression version.
+/// means that no compression scheme is assigned to that ID on that compression version.
 ///
 /// | ID | V0     | V4      | V5             | V6      | V8      | V9      |
 /// |----|--------|---------|----------------|---------|---------|---------|
