@@ -249,7 +249,7 @@ impl CompressionScheme {
 /// `Entry` instances can be constructed manually, deserialized from binary data using
 /// [`Self::deserialize`], or created when adding files to a new archive using [`ArchiveBuilder`].
 ///
-/// # Compression and binary format versions TODO TODO TODO
+/// # Compression and binary format versions
 ///
 /// `Entry` instances can be converted to and from a binary format that has multiple versions.
 /// The entry format version used in a FAT file is dictated by the [`TableVersion`] header field.
