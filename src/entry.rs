@@ -120,10 +120,12 @@ impl CompressionScheme {
     ///
     /// See the [Scheme IDs] section of the enum documentation for details.
     ///
+    /// [Scheme IDs]: Self#scheme-ids
+    ///
     /// # Errors
     ///
-    /// This function will return [`UnknownCompressionScheme`] if the given `scheme_id` is unknown
-    /// or unsupported for the given `compression_version`.
+    /// This function will return a [`FatDeserializationError::UnknownCompressionScheme`] if the
+    /// given `scheme_id` is unknown or unsupported for the given `compression_version`.
     ///
     /// # Examples
     ///
@@ -142,9 +144,6 @@ impl CompressionScheme {
     /// let unknown = CompressionScheme::try_from_scheme_id(123, CompressionVersion::V9);
     /// assert!(unsupported.is_err());
     /// ```
-    ///
-    /// [Scheme IDs]: Self#scheme-ids
-    /// [`UnknownCompressionScheme`]: FatDeserializationError::UnknownCompressionScheme
     pub fn try_from_scheme_id(
         scheme_id: u8,
         compression_version: CompressionVersion,
@@ -173,9 +172,11 @@ impl CompressionScheme {
     ///
     /// See the [Scheme IDs] section of the enum documentation for details.
     ///
+    /// [Scheme IDs]: Self#scheme-ids
+    ///
     /// # Errors
     ///
-    /// This function will return [`UnsupportedCompressionScheme`] if the given
+    /// This function will return an [`EntryError::UnsupportedCompressionScheme`] if the given
     /// `compression_version` does not have an ID for this compression scheme.
     ///
     /// # Examples
@@ -192,9 +193,6 @@ impl CompressionScheme {
     /// assert_matches!(lz4lw.try_to_scheme_id(CompressionVersion::V8), Ok(3));
     /// assert!(lz4lw.try_to_scheme_id(CompressionVersion::V0).is_err());
     /// ```
-    ///
-    /// [Scheme IDs]: Self#scheme-ids
-    /// [`UnsupportedCompressionScheme`]: EntryError::UnsupportedCompressionScheme
     pub fn try_to_scheme_id(
         self,
         compression_version: CompressionVersion,
@@ -224,6 +222,8 @@ impl CompressionScheme {
     ///
     /// See the [Scheme IDs] section of the enum documentation for details.
     ///
+    /// [Scheme IDs]: Self#scheme-ids
+    ///
     /// # Examples
     ///
     /// ```
@@ -235,8 +235,6 @@ impl CompressionScheme {
     /// assert!(lzma.is_supported_for(CompressionVersion::V6));
     /// assert!(!lzma.is_supported_for(CompressionVersion::V0));
     /// ```
-    ///
-    /// [Scheme IDs]: Self#scheme-ids
     #[must_use]
     pub fn is_supported_for(self, compression_version: CompressionVersion) -> bool {
         self.try_to_scheme_id(compression_version).is_ok()
@@ -498,7 +496,7 @@ impl Entry {
     ///
     /// # Errors
     ///
-    /// This function will return an error in the following cases:
+    /// This function will return the following error variants:
     ///
     /// - [`Io`]: failed to read enough bytes due to an I/O error, such as an unexpected EOF, etc.
     /// - [`UnknownCompressionScheme`]: the compression scheme ID in the binary representation was
