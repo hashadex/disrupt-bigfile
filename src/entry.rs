@@ -128,11 +128,13 @@ impl CompressionScheme {
     /// # Examples
     ///
     /// ```
+    /// use std::assert_matches;
+    ///
     /// use disrupt_bigfile::entry::CompressionScheme;
     /// use disrupt_bigfile::header::CompressionVersion;
     ///
     /// let xmemcompress = CompressionScheme::try_from_scheme_id(3, CompressionVersion::V5);
-    /// std::assert_matches!(xmemcompress, Ok(CompressionScheme::Xmemcompress));
+    /// assert_matches!(xmemcompress, Ok(CompressionScheme::Xmemcompress));
     ///
     /// let unsupported = CompressionScheme::try_from_scheme_id(3, CompressionVersion::V0);
     /// assert!(unsupported.is_err());
@@ -179,13 +181,15 @@ impl CompressionScheme {
     /// # Examples
     ///
     /// ```
+    /// use std::assert_matches;
+    ///
     /// use disrupt_bigfile::entry::CompressionScheme;
     /// use disrupt_bigfile::header::CompressionVersion;
     ///
     /// let lz4lw = CompressionScheme::Lz4lw;
     ///
-    /// std::assert_matches!(lz4lw.try_to_scheme_id(CompressionVersion::V6), Ok(2));
-    /// std::assert_matches!(lz4lw.try_to_scheme_id(CompressionVersion::V8), Ok(3));
+    /// assert_matches!(lz4lw.try_to_scheme_id(CompressionVersion::V6), Ok(2));
+    /// assert_matches!(lz4lw.try_to_scheme_id(CompressionVersion::V8), Ok(3));
     /// assert!(lz4lw.try_to_scheme_id(CompressionVersion::V0).is_err());
     /// ```
     ///
