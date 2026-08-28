@@ -291,7 +291,7 @@ impl Dependency {
         })
     }
 
-    pub fn serialize(&self, mut out: impl Write) -> Result<(), io::Error> {
+    pub fn serialize(self, mut out: impl Write) -> Result<(), io::Error> {
         out.write_u64::<LE>(self.archive_hash)?;
         out.write_u64::<LE>(self.name_hash)?;
 
