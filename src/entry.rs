@@ -785,7 +785,7 @@ impl Entry {
     ///
     /// let mut out = Vec::new();
     ///
-    /// // You can pass a mutable reference to your reader in order to avoid consuming it and use
+    /// // You can pass a mutable reference to your writer in order to avoid consuming it and use
     /// // it multiple times:
     /// entry_a.serialize(&mut out, table_version, compression_version)?;
     /// entry_b.serialize(&mut out, table_version, compression_version)?;
