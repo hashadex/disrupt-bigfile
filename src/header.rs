@@ -99,6 +99,7 @@ impl fmt::Display for TableVersion {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
+#[non_exhaustive]
 pub enum Platform {
     Any,
     Win32,

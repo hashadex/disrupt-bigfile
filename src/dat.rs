@@ -7,6 +7,7 @@ use crate::compression::xmemcompress;
 use crate::entry::{CompressionScheme, Entry};
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum UnpackError {
     #[error("io error")]
     Io(#[from] io::Error),
