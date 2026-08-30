@@ -321,13 +321,30 @@ pub struct FatHeader {
 }
 
 impl FatHeader {
+    fn validate(self) -> Result<Self, FatConstructionError> {
+        if !self.platform.is_supported_for(self.fat_version) {
+            Err(FatConstructionError::UnsupportedPlatform {
+                platform: self.platform,
+                fat_version: self.fat_version,
+            })
+        } else if let Some(ref dependencies) = self.dependencies
+            && u32::try_from(dependencies.len()).is_err()
+        {
+            Err(FatConstructionError::DependencyCountWontFit(
+                dependencies.len(),
+            ))
+        } else {
+            Ok(self)
+        }
+    }
+
     #[must_use]
     pub fn new_fat3(
         table_version: TableVersion,
         platform: Platform,
         compression_version: CompressionVersion,
         name_hash_version: NameHashVersion,
-    ) -> Self {
+    ) -> Result<Self, FatConstructionError> {
         Self {
             fat_version: FatVersion::Fat3,
             table_version,
@@ -337,6 +354,7 @@ impl FatHeader {
             archive_hash: None,
             dependencies: None,
         }
+        .validate()
     }
 
     pub fn new_fat5(
@@ -347,20 +365,7 @@ impl FatHeader {
         archive_hash: u64,
         dependencies: Vec<Dependency>,
     ) -> Result<Self, FatConstructionError> {
-        if !platform.is_supported_for(FatVersion::Fat5) {
-            return Err(FatConstructionError::UnsupportedPlatform {
-                platform,
-                fat_version: FatVersion::Fat5,
-            });
-        }
-
-        if u32::try_from(dependencies.len()).is_err() {
-            return Err(FatConstructionError::DependencyCountWontFit(
-                dependencies.len(),
-            ));
-        }
-
-        Ok(Self {
+        Self {
             fat_version: FatVersion::Fat5,
             table_version,
             platform,
@@ -368,7 +373,8 @@ impl FatHeader {
             name_hash_version,
             archive_hash: Some(archive_hash),
             dependencies: Some(dependencies),
-        })
+        }
+        .validate()
     }
 
     pub fn deserialize(mut input: impl Read) -> Result<Self, FatDeserializationError> {

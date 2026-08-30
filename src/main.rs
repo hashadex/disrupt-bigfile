@@ -396,9 +396,9 @@ fn pack(args: PackArgs) -> anyhow::Result<()> {
                 archive_hash,
                 dependencies,
             )
-            .context("invalid FAT header configuration")?
         }
-    };
+    }
+    .context("invalid FAT header configuration")?;
 
     let input_dir = args.input_dir.canonicalize().with_context(|| {
         format!(
