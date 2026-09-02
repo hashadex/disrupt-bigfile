@@ -321,6 +321,7 @@ pub struct FatHeader {
     dependencies: Option<Vec<Dependency>>,
 }
 
+/// # Construction
 impl FatHeader {
     fn validate(self) -> Result<Self, FatConstructionError> {
         if !self.platform.is_supported_for(self.fat_version) {
@@ -377,7 +378,10 @@ impl FatHeader {
         }
         .validate()
     }
+}
 
+/// # Serialization and deserialization
+impl FatHeader {
     pub fn deserialize(mut input: impl Read) -> Result<Self, FatDeserializationError> {
         let fat_version = FatVersion::try_from_magic(input.read_u32::<LE>()?)?;
         let table_version = TableVersion::try_from(input.read_u32::<LE>()?)?;
@@ -454,7 +458,10 @@ impl FatHeader {
 
         Ok(())
     }
+}
 
+/// # Field access
+impl FatHeader {
     #[must_use]
     pub fn fat_version(&self) -> FatVersion {
         self.fat_version
@@ -489,7 +496,13 @@ impl FatHeader {
     pub fn dependencies(&self) -> Option<&[Dependency]> {
         self.dependencies.as_deref()
     }
+}
 
+/// # Presets
+///
+/// These functions allow you to quickly construct a header with the same configuration as in the
+/// original games.
+impl FatHeader {
     #[must_use]
     pub const fn new_wd1_win64() -> Self {
         Self {
