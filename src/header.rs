@@ -504,7 +504,7 @@ impl FatHeader {
 /// original games.
 impl FatHeader {
     #[must_use]
-    pub const fn new_wd1_win64() -> Self {
+    pub fn new_wd1_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
             table_version: TableVersion::V8,
@@ -517,7 +517,7 @@ impl FatHeader {
     }
 
     #[must_use]
-    pub const fn new_wd1_win64_sound() -> Self {
+    pub fn new_wd1_win64_sound() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
             table_version: TableVersion::V8,
@@ -530,7 +530,7 @@ impl FatHeader {
     }
 
     #[must_use]
-    pub const fn new_wd1_wiiu() -> Self {
+    pub fn new_wd1_wiiu() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
             table_version: TableVersion::V8,
@@ -543,7 +543,7 @@ impl FatHeader {
     }
 
     #[must_use]
-    pub const fn new_wd1_wiiu_sound() -> Self {
+    pub fn new_wd1_wiiu_sound() -> Self {
         Self {
             fat_version: FatVersion::Fat3,
             table_version: TableVersion::V8,
@@ -556,7 +556,7 @@ impl FatHeader {
     }
 
     #[must_use]
-    pub const fn new_wd2_win64() -> Self {
+    pub fn new_wd2_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
             table_version: TableVersion::V11,
@@ -569,7 +569,7 @@ impl FatHeader {
     }
 
     #[must_use]
-    pub const fn new_wd2_ps4() -> Self {
+    pub fn new_wd2_ps4() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
             table_version: TableVersion::V11,
@@ -582,7 +582,7 @@ impl FatHeader {
     }
 
     #[must_use]
-    pub const fn new_wd2_sound() -> Self {
+    pub fn new_wd2_sound() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
             table_version: TableVersion::V11,
@@ -595,7 +595,7 @@ impl FatHeader {
     }
 
     #[must_use]
-    pub const fn new_wdl_win64() -> Self {
+    pub fn new_wdl_win64() -> Self {
         Self {
             fat_version: FatVersion::Fat5,
             table_version: TableVersion::V13,
