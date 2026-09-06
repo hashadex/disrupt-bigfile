@@ -11,7 +11,10 @@ use crate::fat::FatDeserializationError;
 use crate::header::{CompressionVersion, TableVersion};
 use crate::name_hash_db;
 
-/// Errors that might happen when validating or serializing an [`Entry`].
+/// Errors that might happen when [validating] or [serializing] an [`Entry`].
+///
+/// [validating]: Entry::validate
+/// [serializing]: Entry::serialize
 #[derive(Debug, thiserror::Error)]
 pub enum EntryError {
     /// Failed to write the entry's serialized bytes to an output due to an I/O error.
