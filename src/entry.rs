@@ -573,8 +573,13 @@ impl Entry {
     /// `compression_version`, returning an [`Ok`] if it is invalid or an [`Err`] containing the
     /// reason otherwise.
     ///
+    /// See the [Compression and binary format versions] section of the enum documentation for
+    /// details.
+    ///
     /// In most cases, you should use [`Self::serialize`] if just you need to validate and
     /// serialize an entry at the same time.
+    ///
+    /// [Compression and binary format versions]: Self#compression-and-binary-format-versions
     ///
     /// # Errors
     ///
