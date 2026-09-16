@@ -173,28 +173,28 @@ impl fmt::Display for TableVersion {
 
 /// Target platform of the archive.
 ///
-/// Does not seem to affect anything.
+/// Not sure what its purpose is.
 ///
 /// # Platform IDs
 ///
 /// Similarly to the [`CompressionScheme`] of an [`Entry`], the `Platform` is stored as an ID
-/// number in the serialized FAT header. The [`FatVersion`] dictates which ID numbers are assigned
-/// to each platform. Some platforms have different ID numbers depending on the version, and some
-/// platforms don't even have an ID assigned to them on some versions. In that case, it means that
-/// the platform is not supported for that FAT version.
+/// number in the serialized [`FatHeader`]. The ID numbers that are assigned to each `Platform`
+/// depend on the [`FatVersion`] of the archive. Some `Platforms`s do not have an ID assigned to
+/// them on some `FatVersion`s. In that case, it means that the `Platform` is not supported by that
+/// `FatVersion`.
 ///
-/// The table below what ID is assigned to each platform to each version. Empty cell means that the
-/// platform is not supported on that version.
+/// The table below what ID is assigned to each `Platform` on each `FatVersion`. Empty cell means
+/// that the `Platform` is not supported on that version.
 ///
-/// | Platform | [`Fat3`] | [`Fat5`] |
-/// |----------|----------|----------|
-/// | `Any`    | 0        | 0        |
-/// | `Win32`  | 1        |          |
-/// | `Xenon`  | 2        |          |
-/// | `Ps3`    | 3        |          |
-/// | `Win64`  | 4        | 1        |
-/// | `WiiU`   | 8        |          |
-/// | `Orbis`  |          | 3        |
+/// | `Platform` | [`Fat3`] | [`Fat5`] |
+/// |------------|----------|----------|
+/// | `Any`      | 0        | 0        |
+/// | `Win32`    | 1        |          |
+/// | `Xenon`    | 2        |          |
+/// | `Ps3`      | 3        |          |
+/// | `Win64`    | 4        | 1        |
+/// | `WiiU`     | 8        |          |
+/// | `Orbis`    |          | 3        |
 ///
 /// [`CompressionScheme`]: crate::entry::CompressionScheme
 /// [`Entry`]: crate::entry::Entry
@@ -226,11 +226,9 @@ pub enum Platform {
 }
 
 impl Platform {
-    /// Creates a `Platform` from a `platform_id` according to the FAT file's `fat_version`.
+    /// Creates a `Platform` from a [`platform_id`] according to the FAT file's `fat_version`.
     ///
-    /// See the [Platform IDs] section of the enum documentation for details.
-    ///
-    /// [Platform IDs]: Self#platform-ids
+    /// [`platform_id`]: Self#platform-ids
     ///
     /// # Errors
     ///
@@ -267,11 +265,9 @@ impl Platform {
         }
     }
 
-    /// Returns the platform ID assigned to this `Platform` on the given `fat_version`.
+    /// Returns the [platform ID] assigned to this `Platform` on the given `fat_version`.
     ///
-    /// See the [Platform IDs] section of the enum documentation for details.
-    ///
-    /// [Platform IDs]: Self#platform-ids
+    /// [platform ID]: Self#platform-ids
     ///
     /// # Errors
     ///
@@ -304,11 +300,9 @@ impl Platform {
         }
     }
 
-    /// Checks if the given `fat_version` has an ID assigned to this `Platform`.
+    /// Checks if the given `fat_version` has an [ID] assigned to this `Platform`.
     ///
-    /// See the [Platform IDs] section of the enum documentation for details.
-    ///
-    /// [Platform IDs]: Self#platform-ids
+    /// [ID]: Self#platform-ids
     ///
     /// # Examples
     ///
@@ -341,10 +335,10 @@ impl fmt::Display for Platform {
 /// Compression version of the archive.
 ///
 /// Affects which [`CompressionSchemes`] can be used in the [`Entries`] of this archive and their
-/// scheme IDs. See the [scheme IDs section of `CompressionScheme` documentation] for details.
+/// [scheme IDs].
 ///
 /// [`CompressionSchemes`]: crate::entry::CompressionScheme
-/// [scheme IDs section of `CompressionScheme` documentation]: crate::entry::CompressionScheme#scheme-ids
+/// [scheme IDs]: crate::entry::CompressionScheme#scheme-ids
 /// [`Entries`]: crate::entry::Entry
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
 pub enum CompressionVersion {
@@ -411,7 +405,7 @@ impl fmt::Display for CompressionVersion {
 
 /// [`Entry` name hash] version of the archive.
 ///
-/// Does not seem to affect anything.
+/// Not sure what its purpose is.
 ///
 /// [`Entry` name hash]: crate::entry::Entry::name_hash
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
@@ -500,7 +494,7 @@ pub struct Dependency {
 }
 
 impl Dependency {
-    /// Reads some bytes from `input` and converts them into a new `Dependency`.
+    /// Reads bytes from `input` and converts them into a new `Dependency`.
     ///
     /// # Errors
     ///
@@ -751,67 +745,35 @@ impl FatHeader {
 
 /// # Serialization and deserialization
 impl FatHeader {
-    /// Reads some bytes from `input` and converts them into a new `FatHeader`.
+    /// Reads bytes from `input` and converts them into a new `FatHeader`.
     ///
     /// # Errors
     ///
-    /// This function will return the following error variants:
-    ///
-    /// * [`Io`]: failed to read enough bytes due to an I/O error.
-    /// * [`BadMagic`]: the first four bytes are not equal to [`FAT3_MAGIC`] or [`FAT5_MAGIC`].
-    /// * [`UnknownTableVersion`]: the table version field is not equal to any of the
-    ///   [known table versions].
-    /// * [`UnsupportedPlatformId`]: the platform ID field is not equal to any of the
-    ///   [supported platform IDs] for the FAT version of this header.
-    /// * [`UnknownCompressionVersion`]: the compression version field is not equal to any of the
-    ///   [known compression versions].
-    /// * [`UnknownNameHashVersion`]: the name hash version field is not equal to any of the
-    ///   [known name hash versions].
-    /// * [`UnexpectedPaddingByte`]: the `0x0B` byte (after the name hash version field) is not
-    ///   equal to `00`.
-    /// * [`DependencyAllocationFailed`]: failed to allocate enough memory to store the
-    ///   dependencies, due to the system not having enough available memory or pointer width.
-    ///
-    /// [`Io`]: FatDeserializationError::Io
-    /// [`BadMagic`]: FatDeserializationError::BadMagic
-    /// [`UnknownTableVersion`]: FatDeserializationError::UnknownTableVersion
-    /// [`UnsupportedPlatformId`]: FatDeserializationError::UnsupportedPlatformId
-    /// [`UnknownCompressionVersion`]: FatDeserializationError::UnknownCompressionVersion
-    /// [`UnknownNameHashVersion`]: FatDeserializationError::UnknownNameHashVersion
-    /// [`UnexpectedPaddingByte`]: FatDeserializationError::UnexpectedPaddingByte
-    /// [`DependencyAllocationFailed`]: FatDeserializationError::DependencyAllocationFailed
-    ///
-    /// [known table versions]: TableVersion
-    /// [supported platform IDs]: Platform#platform-ids
-    /// [known compression versions]: CompressionVersion
-    /// [known name hash versions]: NameHashVersion
+    /// This function will return an error under a number of different circumstances. See the
+    /// documentation for [`FatDeserializationError`] for details.
     ///
     /// # Examples
     ///
     /// ```
+    /// use std::io::Cursor;
+    ///
     /// use disrupt_bigfile::header::{
     ///     CompressionVersion, FatHeader, FatVersion, Platform, TableVersion,
     /// };
     ///
-    /// let data = [
-    ///     0x35, 0x54, 0x41, 0x46, // Magic
-    ///     0x0D, 0x00, 0x00, 0x00, // Table version
-    ///     0x01, // Platform ID
-    ///     0x08, // Compression version
-    ///     0x46, // Name hash version
-    ///     0x00, // Padding byte
-    ///     0x8E, 0xB9, 0x32, 0x3F, 0x7F, 0x97, 0xE2, 0xA7, // Archive hash
-    ///     0x01, 0x00, 0x00, 0x00, // Dependency count
-    ///     0x14, 0xCC, 0x50, 0xB3, 0xC0, 0x28, 0x82, 0xB7, // Dependency archive hash
-    ///     0xA4, 0x5F, 0x4E, 0x95, 0xB5, 0xE2, 0x38, 0xBE, // Dependency name hash
-    /// ];
+    /// let data = Cursor::new([
+    ///     0x35, 0x54, 0x41, 0x46, 0x0D, 0x00, 0x00, 0x00, 0x01, 0x08, 0x46, 0x00, 0x8E, 0xB9,
+    ///     0x32, 0x3F, 0x7F, 0x97, 0xE2, 0xA7, 0x01, 0x00, 0x00, 0x00, 0x14, 0xCC, 0x50, 0xB3,
+    ///     0xC0, 0x28, 0x82, 0xB7, 0xA4, 0x5F, 0x4E, 0x95, 0xB5, 0xE2, 0x38, 0xBE,
+    /// ]);
     ///
-    /// let header = FatHeader::deserialize(data.as_slice())?;
+    /// let header = FatHeader::deserialize(data)?;
     ///
     /// assert_eq!(header.fat_version(), FatVersion::Fat5);
     /// assert_eq!(header.table_version(), TableVersion::V13);
     /// assert_eq!(header.platform(), Platform::Win64);
     /// assert_eq!(header.compression_version(), CompressionVersion::V8);
+    ///
     /// assert!(header.archive_hash().is_some_and(|hash| hash == 0xA7E2_977F_3F32_B98E));
     /// assert!(header.dependencies().is_some_and(|deps| deps.len() == 1));
     /// # Ok::<(), disrupt_bigfile::fat::FatDeserializationError>(())
@@ -858,7 +820,7 @@ impl FatHeader {
         })
     }
 
-    /// Converts this header into a binary format and writes the bytes to `out`.
+    /// Converts this `FatHeader` into a binary format and writes the bytes to `out`.
     ///
     /// # Errors
     ///
@@ -872,7 +834,7 @@ impl FatHeader {
     /// let header = FatHeader::new_wd1_win64();
     /// let mut out = Vec::new();
     ///
-    /// // You can pass a mutable reference to your writer in order to avoid consuming it and use
+    /// // You can pass a mutable reference to your writer in order to avoid consuming it and to use
     /// // it afterwards:
     /// header.serialize(&mut out)?;
     ///
