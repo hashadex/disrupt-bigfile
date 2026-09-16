@@ -31,8 +31,7 @@ pub enum EntryError {
     #[error("offset {offset:#X} is too large for current table version (expected {max:#X} max)")]
     OffsetWontFit { offset: u64, max: u64 },
 
-    /// The [`Entry`]'s [`CompressionScheme`] is not supported by the selected
-    /// [`CompressionVersion`].
+    /// The [`Entry`]'s compression `scheme` is not supported by the selected `compression_scheme`.
     #[error(
         "compression scheme {scheme} is not supported by compression version {compression_version}"
     )]
