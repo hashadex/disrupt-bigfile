@@ -1,3 +1,5 @@
+//! BigFile archive creation.
+
 use std::borrow::Cow;
 use std::fs::File;
 use std::hash::Hasher;
@@ -11,21 +13,45 @@ use crate::entry::{CompressionScheme, Entry, EntryError};
 use crate::fat::Fat;
 use crate::header::{FatHeader, FatVersion};
 
+/// Errors that might happen when adding a file to an archive using [`ArchiveBuilder`].
 #[derive(Debug, thiserror::Error)]
 pub enum PackError {
+    /// Failed to seek or write to the DAT due to an I/O error.
     #[error("io error")]
     Io(#[from] io::Error),
 
+    /// Failed to create a [valid] [`Entry`] for the added file due to its [offset] or [size] being
+    /// too large.
+    ///
+    /// [valid]: Entry#versions-and-validity
+    /// [offset]: Entry::offset
+    /// [size]: Entry::uncompressed_size
     #[error("failed to create an entry")]
     Entry(#[from] EntryError),
 
+    /// Can't add more than [`u32::MAX`] files to an archive.
     #[error("can't add more than {} entries", u32::MAX)]
     TableIsFull,
 
+    /// Failed to compute the [name hash] for a [special path] due to it being in an invalid
+    /// format.
+    ///
+    /// [name hash]: Entry::name_hash
+    /// [special path]: ArchiveBuilder#special-paths
     #[error("can't compute name hash for invalid special path '{0}'")]
     InvalidSpecialPath(PathBuf),
 }
 
+/// A builder used for creating new [`Fat`]/DAT pairs.
+///
+/// This struct wraps a DAT writer and allows you to write files to it, automatically creating and
+/// storing [`Fat`] [`Entries`] for them. When you're done adding files to the archive, use
+/// [`Self::finish`] to create a new [`Fat`] instance containing those `Entries`. Then, you can use
+/// [`Fat::create`] to serialize and save the `Fat` to the filesystem.
+///
+/// File compression is not yet supported, meaning that all added files will be uncompressed.
+///
+/// [`Entries`]: Entry
 pub struct ArchiveBuilder<W: Write + Seek> {
     fat_header: FatHeader,
     entries: Vec<Entry>,
@@ -35,6 +61,33 @@ pub struct ArchiveBuilder<W: Write + Seek> {
 }
 
 impl<W: Write + Seek> ArchiveBuilder<W> {
+    /// Creates a new builder that will write the contents of the files being archived to `dat` and
+    /// build a [`Fat`] with the given `fat_header`.
+    ///
+    /// If you want to write the packed files to a DAT file on the filesystem, use [`Self::create`]
+    /// instead.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an I/O error if it fails to get the [`stream_position`] of the
+    /// `dat`.
+    ///
+    /// [`stream_position`]: Seek::stream_position
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::io::Cursor;
+    ///
+    /// use disrupt_bigfile::builder::ArchiveBuilder;
+    /// use disrupt_bigfile::header::FatHeader;
+    ///
+    /// let fat_header = FatHeader::new_wd1_win64();
+    /// let dat = Cursor::new(vec![]);
+    ///
+    /// let builder = ArchiveBuilder::new(fat_header, dat)?;
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
     pub fn new(fat_header: FatHeader, mut dat: W) -> Result<Self, io::Error> {
         let dat_position = dat.stream_position()?;
 
@@ -102,6 +155,87 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         }
     }
 
+    /// Adds a new file to the archive, copying its contents from `input` to the DAT and creating
+    /// an [`Entry`] for it with the [`name_hash`] computed from the [`relative_entry_path`].
+    ///
+    /// Use [`Self::add_file`] instead if you want to archive a file from the filesystem.
+    ///
+    /// [`name_hash`]: Entry::name_hash
+    /// [`relative_entry_path`]: #relative_entry_path
+    ///
+    /// # `relative_entry_path`
+    ///
+    /// The `relative_entry_path` should be the [`Path`] to the file being added, relative to the
+    /// root directory of the archive.
+    ///
+    /// For example, if you have a directory named `root_dir` that contains all the files you want
+    /// to archive, like this:
+    ///
+    /// ```text
+    /// root_dir/
+    /// ├── domino
+    /// │   └── script.lua
+    /// ├── generated
+    /// │   └── database.obj
+    /// └── ui
+    ///     └── texture.xbt
+    /// ```
+    ///
+    /// Then the `relative_entry_path` for each of those files should be `domino/script.lua`,
+    /// `generated/database.obj` and `ui/texture.xbt`.
+    ///
+    /// If the `relative_entry_path` uses UNIX path separators (`/`), they will automatically be
+    /// converted to Windows path separators (`\`).
+    ///
+    /// ## Special paths
+    ///
+    /// For compatibility with [Gibbed.Disrupt], `relative_entry_path`s starting with the special
+    /// `__UNKNOWN` or `__DUPLICATE` directories will be handled in a different way.
+    ///
+    /// ### `__UNKNOWN`
+    ///
+    /// `__UNKNOWN` paths must have the form `__UNKNOWN/<name_hash>`, where `<name_hash>` is a 32
+    /// or 64 bit hexadecimal number (without the `0x` prefix).
+    ///
+    /// The name hash for these files will be parsed verbatim from `<name_hash>`. For example, for
+    /// a file with the path `__UNKNOWN/DEADBEEF` the name hash will be `0xDEAD_BEEF`.
+    ///
+    /// ### `__DUPLICATE`
+    ///
+    /// Paths in the `__DUPLICATE` directory must have the form
+    /// `__DUPLICATE/<original_path>__DUPLICATE_<number>.<extension>`.
+    ///
+    /// These paths will be cleaned from all the `DUPLICATE` stuff and the name hash for them will
+    /// be computed from their `<original_path>`. For example, the name hash for
+    /// `__DUPLICATE/credits/pc/credits__DUPLICATE_1.xml` will be the same as for
+    /// `credits/pc/credits.xml`. Note that unlike Gibbed.Disrupt, the duplicate `<number>` will
+    /// not be respected.
+    ///
+    /// [Gibbed.Disrupt]: https://github.com/gibbed/Gibbed.Disrupt
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error under a number of different circumstances. See the
+    /// documentation for [`PackError`] for details.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::io::Cursor;
+    ///
+    /// use disrupt_bigfile::builder::ArchiveBuilder;
+    /// use disrupt_bigfile::header::FatHeader;
+    ///
+    /// let header = FatHeader::new_wd1_win64();
+    /// let mut builder = ArchiveBuilder::create(header, "out_dir/file.dat")?;
+    ///
+    /// let mut data = Cursor::new("<credits>John Doe</credits>");
+    ///
+    /// // If you need to, you can pass a mutable reference to your reader in order to avoid
+    /// // consuming it:
+    /// builder.add(&mut data, "credits/pc/credits.xml")?;
+    /// # Ok::<(), disrupt_bigfile::builder::PackError>(())
+    /// ```
     pub fn add(
         &mut self,
         mut input: impl Read,
@@ -151,6 +285,42 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         Ok(())
     }
 
+    /// Adds a new file to the archive, copying its contents from a file located at the
+    /// [`relative_entry_path`] in the `archive_root` directory to the DAT and creating an
+    /// [`Entry`] for it with the [`name_hash`] computed from the `relative_entry_path`
+    ///
+    /// For example, if the `archive_root` is `root_dir/` and the `relative_entry_path` is set
+    /// `credits/pc/credits.xml`, then the file will be copied from
+    /// `root_dir/credits/pc/credits.xml`.
+    ///
+    /// This is a convinience function for opening a [`File`] and archiving it using [`Self::add`].
+    ///
+    /// [`relative_entry_path`]: Self#relative_entry_path
+    /// [`name_hash`]: Entry::name_hash
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error under a number of different circumstances. See the
+    /// documentation for [`PackError`] for details.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use disrupt_bigfile::builder::ArchiveBuilder;
+    /// use disrupt_bigfile::header::FatHeader;
+    ///
+    /// let header = FatHeader::new_wd1_win64();
+    /// let mut builder = ArchiveBuilder::create(header, "out_dir/file.dat")?;
+    ///
+    /// let archive_root = "root_dir/";
+    ///
+    /// // Adds a file from root_dir/ui/texture.xbt
+    /// builder.add_file(archive_root, "ui/texture.xbt")?;
+    ///
+    /// // Adds a file from root_dir/generated/database.obj
+    /// builder.add_file(archive_root, "generated/database.obj")?;
+    /// # Ok::<(), disrupt_bigfile::builder::PackError>(())
+    /// ```
     pub fn add_file(
         &mut self,
         archive_root: impl AsRef<Path>,
@@ -162,6 +332,30 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         self.add(file, relative_entry_path)
     }
 
+    /// Finishes building this archive, flushing any remaining buffered data to the wrapped DAT
+    /// writer and returning the [`Fat`] constructed for it.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an I/O error if it fails to [`flush`] the wrapped DAT writer.
+    ///
+    /// [`flush`]: Write::flush
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use disrupt_bigfile::builder::ArchiveBuilder;
+    /// use disrupt_bigfile::header::FatHeader;
+    ///
+    /// let header = FatHeader::new_wd1_win64();
+    /// let mut builder = ArchiveBuilder::create(header, "out_dir/file.dat")?;
+    ///
+    /// builder.add_file("root_dir/", "ui/texture.xbt")?;
+    ///
+    /// let fat = builder.finish()?;
+    /// fat.create("out_dir/file.fat")?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn finish(mut self) -> Result<Fat, io::Error> {
         self.dat.flush()?;
 
@@ -170,6 +364,26 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
 }
 
 impl ArchiveBuilder<BufWriter<File>> {
+    /// Creates a new builder that will write the contents of the files being archived to a new
+    /// file at `dat_path` and build a [`Fat`] with the given `fat_header`.
+    ///
+    /// If a file at `dat_path` already exists, it will be overwritten.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an I/O error if it fails to open or seek the file at `dat_path`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use disrupt_bigfile::builder::ArchiveBuilder;
+    /// use disrupt_bigfile::header::FatHeader;
+    ///
+    /// let fat_header = FatHeader::new_wd1_win64();
+    ///
+    /// let builder = ArchiveBuilder::create(fat_header, "out_dir/file.dat")?;
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
     pub fn create(fat_header: FatHeader, dat_path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let dat = BufWriter::new(File::create(dat_path)?);
 
