@@ -90,7 +90,7 @@ fn list(args: ListArgs) -> anyhow::Result<()> {
 
     let mut fat_paths = args.fat_paths.iter().peekable();
     while let Some(fat_path) = fat_paths.next() {
-        let fat = open_fat(&fat_path)?;
+        let fat = open_fat(fat_path)?;
 
         if multiple_paths {
             writeln!(lock, "{}:", fat_path.display())?;
