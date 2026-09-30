@@ -84,7 +84,7 @@ struct ListArgs {
     verbose: bool,
 }
 
-fn list(args: ListArgs) -> anyhow::Result<()> {
+fn list(args: &ListArgs) -> anyhow::Result<()> {
     let mut lock = io::stdout().lock();
     let multiple_paths = args.fat_paths.len() > 1;
 
@@ -481,7 +481,7 @@ fn main() -> anyhow::Result<()> {
 
     match args.command {
         Command::Info(args) => info(args).or_else(suppress_broken_pipe),
-        Command::List(args) => list(args).or_else(suppress_broken_pipe),
+        Command::List(args) => list(&args).or_else(suppress_broken_pipe),
         Command::Unpack(args) => unpack(args),
         Command::Pack(args) => pack(args),
     }
