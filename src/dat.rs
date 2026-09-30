@@ -295,7 +295,9 @@ impl<R: Read + Seek> Dat<R> {
     ) -> Result<(), UnpackError> {
         let dest = archive_root_dir.as_ref().join(entry.path());
 
+        #[expect(clippy::missing_panics_doc, reason = "infallible")]
         let dest_dir = dest.parent().expect("dest should always have a parent");
+
         fs::create_dir_all(dest_dir)?;
 
         self.unpack_to_file(entry, dest)

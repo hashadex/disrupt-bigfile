@@ -241,11 +241,13 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
         mut input: impl Read,
         relative_entry_path: impl AsRef<Path>,
     ) -> Result<(), PackError> {
+        #[expect(clippy::missing_panics_doc, reason = "infallible")]
         let entry_count: u32 = self
             .entries
             .len()
             .try_into()
             .expect("add() should guarantee that entries.len() <= u32::MAX");
+
         if entry_count == u32::MAX {
             return Err(PackError::TableIsFull);
         }

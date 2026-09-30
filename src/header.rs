@@ -841,6 +841,7 @@ impl FatHeader {
     /// assert!(!out.is_empty());
     /// # Ok::<(), std::io::Error>(())
     /// ```
+    #[expect(clippy::missing_panics_doc, reason = "infallible")]
     pub fn serialize(&self, mut out: impl Write) -> Result<(), io::Error> {
         out.write_u32::<LE>(self.fat_version.to_magic())?;
         out.write_u32::<LE>(self.table_version.into())?;
