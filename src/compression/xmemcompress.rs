@@ -1,3 +1,7 @@
+//! [`Xmemcompress`] decompression errors.
+//!
+//! [`Xmemcompress`]: crate::entry::CompressionScheme::Xmemcompress
+
 use std::io::{self, Read, Seek, Write};
 
 use byteorder::{BE, ReadBytesExt};
@@ -12,44 +16,65 @@ const XMEMCOMPRESS_CONTEXT_FLAGS: u32 = 0x0;
 const XMEMCOMPRESS_FLAGS: u32 = 0x0;
 const XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE: u32 = 32768;
 
+/// Error that might happen when decompressing a chunk in a file that uses [`Xmemcompress`].
+///
+/// [`Xmemcompress`]: crate::entry::CompressionScheme::Xmemcompress
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub struct ChunkDecompressionError(lzxd::DecompressError);
 
+/// Errors that might happen when decompressing a file that uses [`Xmemcompress`].
+///
+/// [`Xmemcompress`]: crate::entry::CompressionScheme::Xmemcompress
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Failed to read or write enough bytes due to an I/O error
     #[error("io error")]
     Io(#[from] io::Error),
 
+    /// The signature of the compressed file was invalid or unknown.
     #[error("bad magic {0:#X} in header, expected {XMEMCOMPRESS_LZXNATIVE_SIGNATURE:#X}")]
     BadMagic(u32),
 
+    /// The value of the version field in the header of the compressed file was unknown.
     #[error("unknown version {0:#X} in header, expected {XMEMCOMPRESS_VERSION:#X}")]
     UnknownVersion(u16),
 
+    /// The reserved field in the header contained non-zero bytes.
     #[error("unexpected data {0:#X} in reserved, expected {XMEMCOMPRESS_RESERVED:#X}")]
     UnexpectedReserved(u16),
 
+    /// The value of the context flags field in the header of the compressed file was unknown.
     #[error("unknown context flags {0:#X}, expected {XMEMCOMPRESS_CONTEXT_FLAGS:#X}")]
     UnknownContextFlags(u32),
 
+    /// The value of the flags field in the header of the compressed file was unknown.
     #[error("unknown flags {0:#X}, expected {XMEMCOMPRESS_FLAGS:#X}")]
     UnknownFlags(u32),
 
+    /// The value of the window size fields in the header of the compressed file was unsupported.
     #[error("window size {0} is not supported")]
     UnsupportedWindowSize(u32),
 
+    /// The value of the compression partition size field in the header of the compressed file was
+    /// unknown.
     #[error(
         "unexpected compression partition size {0}, expected {XMEMCOMPRESS_COMPRESSION_PARTITION_SIZE}"
     )]
     UnexpectedCompressionPartitionSize(u32),
 
+    /// The size of the chunk specified in the external header of the chunk was smaller than the
+    /// size of the internal header of the chunk.
     #[error("chunk has an invalid size of {0}")]
     InvalidChunkSize(u32),
 
+    /// Failed to allocate enough memory for the compressed chunk buffer, due to the system not
+    /// having enough available memory, pointer width, or due to the size of the buffer being
+    /// ridiculous (like [`u32::MAX`]).
     #[error("failed to allocate compressed chunk buffer of {0} bytes")]
     CompressedChunkBufferAllocationFailed(u32),
 
+    /// Failed to decompress a chunk of the file.
     #[error("failed to decompress chunk")]
     ChunkDecompression(#[from] ChunkDecompressionError),
 }
