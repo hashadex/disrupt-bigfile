@@ -15,7 +15,8 @@ thiserror = "2.0.18"
 walkdir = "2.5.0"
 
 [lints.clippy]
-pedantic = "warn"
+pedantic = { level = "warn", priority = -1 }
+doc_markdown = "allow"
 
 [build-dependencies]
 fnv1 = "1.0.0"
