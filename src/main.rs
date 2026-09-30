@@ -60,7 +60,7 @@ fn info(args: InfoArgs) -> anyhow::Result<()> {
             writeln!(lock, "{path_display}: {header}")
         } else {
             writeln!(lock, "{path_display}\n{header:#}")
-        }?
+        }?;
     }
 
     Ok(())
