@@ -662,7 +662,6 @@ impl FatHeader {
     /// assert_eq!(header.fat_version(), FatVersion::Fat3);
     /// # Ok::<(), disrupt_bigfile::fat::FatConstructionError>(())
     /// ```
-    #[must_use]
     pub fn new_fat3(
         table_version: TableVersion,
         platform: Platform,
