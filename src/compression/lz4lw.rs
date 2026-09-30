@@ -1,3 +1,7 @@
+//! [`Lz4lw`] decompression errors.
+//!
+//! [`Lz4lw`]: crate::entry::CompressionScheme::Lz4lw
+
 use std::cmp;
 use std::io::{self, Read, Seek, Write};
 
@@ -6,11 +10,20 @@ use byteorder::{LE, ReadBytesExt};
 use crate::entry::Entry;
 use crate::vec;
 
+/// Errors that might happen when decompressing a file that uses [`Lz4lw`].
+///
+/// [`Lz4lw`]: crate::entry::CompressionScheme::Lz4lw
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Failed to read or write enough bytes due to an I/O error.
     #[error("io error")]
     Io(#[from] io::Error),
 
+    /// Can't perform decompression if the [`Entry`]'s [`compressed_size`] is larger than the
+    /// expected [`uncompressed_size`].
+    ///
+    /// [`compressed_size`]: Entry::compressed_size
+    /// [`uncompressed_size`]: Entry::uncompressed_size
     #[error(
         "can't perform decompression if entry's compressed size ({compressed_size}) is larger than the uncompressed size ({uncompressed_size})"
     )]
@@ -19,12 +32,17 @@ pub enum Error {
         compressed_size: u64,
     },
 
+    /// Failed to allocate enough memory for the output buffer, due to the system not having enough
+    /// available memory, pointer width, or due to the expected [`Entry::uncompressed_size`] being
+    /// ridiculous (like [`u64::MAX`]).
     #[error("failed to allocate {0} bytes for the output buffer")]
     OutputBufferAllocationFailed(u64),
 
+    /// The `extra` offset byte was so large it caused an overflow.
     #[error("offset extra byte ({0}) was so large it caused an overflow")]
     OffsetExtraOverflow(u8),
 
+    /// The `offset` of a block was larger than the amount of currently `decompressed` bytes.
     #[error(
         "offset ({offset}) was larger than the amount of currently decompressed bytes ({decompressed})"
     )]
