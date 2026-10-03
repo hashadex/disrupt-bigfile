@@ -118,10 +118,10 @@
 //! // Adds from "input_dir/ui/file.xbt"
 //! builder.add_file(archive_root, "ui/file.xbt")?;
 //!
-//! // Adds from "input_dir/domino/file.xbt"
+//! // Adds from "input_dir/domino/file.lua"
 //! builder.add_file(archive_root, "domino/file.lua")?;
 //!
-//! // Adds from "input_dir/languages/file.xbt"
+//! // Adds from "input_dir/languages/file.loc"
 //! builder.add_file(archive_root, "languages/file.loc")?;
 //!
 //! // After we're done writing the files, create the FAT:

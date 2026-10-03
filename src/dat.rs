@@ -283,7 +283,7 @@ impl<R: Read + Seek> Dat<R> {
     ///     compressed_size: 58_070,
     /// };
     ///
-    /// dat.unpack_to_file(entry, "dest_dir/")?;
+    /// dat.unpack_to_file(entry, "dest_dir/credits/pc/credits.xml")?;
     ///
     /// assert!(fs::exists("dest_dir/credits/pc/credits.xml")?);
     /// # Ok::<(), disrupt_bigfile::dat::UnpackError>(())
@@ -358,7 +358,7 @@ impl<R: Read + Seek> Dat<R> {
 impl Dat<BufReader<File>> {
     /// Opens a file from `path` and creates a new `Dat` instance from it.
     ///
-    /// This is a convinience function for opening a [`File`], wrapping it in a [`BufReader`] and
+    /// This is a convenience function for opening a [`File`], wrapping it in a [`BufReader`] and
     /// using [`Self::new`] with it.
     ///
     /// # Errors

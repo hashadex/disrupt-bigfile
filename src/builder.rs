@@ -295,7 +295,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
     /// `credits/pc/credits.xml`, then the file will be copied from
     /// `root_dir/credits/pc/credits.xml`.
     ///
-    /// This is a convinience function for opening a [`File`] and archiving it using [`Self::add`].
+    /// This is a convenience function for opening a [`File`] and archiving it using [`Self::add`].
     ///
     /// [`relative_entry_path`]: Self#relative_entry_path
     /// [`name_hash`]: Entry::name_hash

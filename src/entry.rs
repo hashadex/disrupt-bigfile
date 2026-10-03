@@ -159,7 +159,7 @@ impl CompressionScheme {
     /// assert!(unsupported.is_err());
     ///
     /// let unknown = CompressionScheme::try_from_scheme_id(123, CompressionVersion::V9);
-    /// assert!(unsupported.is_err());
+    /// assert!(unknown.is_err());
     /// ```
     pub fn try_from_scheme_id(
         scheme_id: u8,
@@ -234,7 +234,7 @@ impl CompressionScheme {
     }
 
     /// Checks if this `CompressionScheme` has a [scheme ID] assigned to it on the given
-    /// `compression_scheme` of the archive.
+    /// `compression_version` of the archive.
     ///
     /// [scheme ID]: Self#scheme-ids
     ///
@@ -310,7 +310,7 @@ impl CompressionScheme {
 /// [`V11`]: TableVersion::V11
 /// [`V13`]: TableVersion::V13
 ///
-/// [^1]: The `Entry` layout is the exactly the same on these two versions.
+/// [^1]: The `Entry` layout is exactly the same on these two versions.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Entry {
     /// [FNV-1 hash] of the entry's filename.
@@ -334,7 +334,7 @@ pub struct Entry {
     /// then this field is always set to 0, and the [`compressed_size`] field is set to the actual
     /// size of the file.
     ///
-    /// For convinience, this library will set both fields to the size of the file when
+    /// For convenience, this library will set both fields to the size of the file when
     /// deserializing uncompressed `Entries`. The reverse is also true -- when serializing
     /// uncompressed `Entries`, the `uncompressed_size` field will be set to 0.
     ///
@@ -605,7 +605,7 @@ impl Entry {
 
         // For some reason, if the entry's compression scheme is None, uncompressed size is set to
         // 0 and compressed size is set to the size of the entry. Let's set both to the same value
-        // for convinience.
+        // for convenience.
         if entry.compression_scheme == CompressionScheme::None {
             entry.uncompressed_size = entry.compressed_size;
         }
@@ -614,7 +614,7 @@ impl Entry {
     }
 
     /// Checks if this `Entry` can be correctly serialized to a given `table_version` and
-    /// `compression_version`, returning an [`Ok`] if it is invalid or an [`Err`] containing the
+    /// `compression_version`, returning an [`Ok`] if it is valid or an [`Err`] containing the
     /// reason otherwise.
     ///
     /// See the [Versions and validity] section for details.
@@ -911,7 +911,7 @@ impl Entry {
 }
 
 /// Displays the entry's name via [`Self::path`]. If the alternate flag (`#`) is specified, the
-/// uncompressed and uncompressed size, compression scheme and offset will also be displayed.
+/// compressed and uncompressed size, compression scheme and offset will also be displayed.
 ///
 /// # Examples
 ///

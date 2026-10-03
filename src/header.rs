@@ -25,8 +25,8 @@ pub const FAT5_MAGIC: u32 = 0x4641_5435;
 
 /// Version/type of the FAT file.
 ///
-/// Affects which target [`Platform`]s are supported in the archive, as well the [archive hash] and
-/// [`Dependencies`], which are only present on [`Fat5`].
+/// Affects which target [`Platform`]s are supported in the archive, as well as the [archive hash]
+/// and [`Dependencies`], which are only present on [`Fat5`].
 ///
 /// The FAT version is determined by the file's signature (the first 4 bytes). [`33 54 41 46`]
 /// (`3TAF`) is for FAT3 and [`35 54 41 46`] (`5TAF`) is for FAT5.
@@ -112,7 +112,7 @@ impl fmt::Display for FatVersion {
 
 /// Version of the binary format of the FAT file's body.
 ///
-/// Affects the binary layout of serialized [`Entries`], as well a 4-byte long "duplicate count"
+/// Affects the binary layout of serialized [`Entries`], as well as a 4-byte long "duplicate count"
 /// value at the very end of a FAT file, which is only present on [`V13`].
 ///
 /// In [Gibbed.Disrupt], this is known as the `Version` field. In this library it was renamed to
@@ -183,8 +183,8 @@ impl fmt::Display for TableVersion {
 /// them on some `FatVersion`s. In that case, it means that the `Platform` is not supported by that
 /// `FatVersion`.
 ///
-/// The table below what ID is assigned to each `Platform` on each `FatVersion`. Empty cell means
-/// that the `Platform` is not supported on that version.
+/// The table below shows what ID is assigned to each `Platform` on each `FatVersion`. Empty cell
+/// means that the `Platform` is not supported on that version.
 ///
 /// | `Platform` | [`Fat3`] | [`Fat5`] |
 /// |------------|----------|----------|
@@ -587,8 +587,8 @@ impl fmt::Display for Dependency {
 ///
 /// This struct represents the header of a FAT file. It stores various information needed to read
 /// and decompress the contents of the archive properly, such as the binary layout version of the
-/// file [`Entries`], the supported [`CompressionScheme`]s, etc. See the the [field access] methods
-/// for the full list of fields contained in a `FatHeader`.
+/// file [`Entries`], the supported [`CompressionScheme`]s, etc. See the [field access] methods for
+/// the full list of fields contained in a `FatHeader`.
 ///
 /// Instances of `FatHeader` can be [converted to and from binary data], [constructed manually] by
 /// specifying the value of each field or [constructed from several available presets] used in the

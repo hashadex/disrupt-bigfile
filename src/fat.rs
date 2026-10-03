@@ -44,7 +44,7 @@ pub enum FatDeserializationError {
     #[error("unknown compression version {0}")]
     UnknownCompressionVersion(u8),
 
-    /// The hame hash version number of the [`FatHeader`] was not equal to any of the known
+    /// The name hash version number of the [`FatHeader`] was not equal to any of the known
     /// [`NameHashVersion`]s.
     ///
     /// [`NameHashVersion`]: crate::header::NameHashVersion
@@ -329,7 +329,7 @@ impl Fat {
 
     /// Deserializes a `Fat` from a file at the given `path`.
     ///
-    /// This is a convinience function for opening a [`File`], wrapping it in a [`BufReader`] and
+    /// This is a convenience function for opening a [`File`], wrapping it in a [`BufReader`] and
     /// using [`Self::deserialize`] with it.
     ///
     /// # Errors
@@ -435,7 +435,7 @@ impl Fat {
 
     /// Creates a new file at `path` and serializes this `Fat` into it.
     ///
-    /// This is a convinience function for creating a [`File`], wrapping it in a [`BufWriter`] and
+    /// This is a convenience function for creating a [`File`], wrapping it in a [`BufWriter`] and
     /// using [`Self::serialize`] with it.
     ///
     /// # Errors
@@ -530,7 +530,7 @@ impl Fat {
 
     /// Consumes this `Fat` and returns ownership of its entries, discarding the header.
     ///
-    /// This is a convinience function for calling [`Self::into_inner`] and discarding the returned
+    /// This is a convenience function for calling [`Self::into_inner`] and discarding the returned
     /// [`FatHeader`].
     ///
     /// The returned entries are guaranteed to be sorted by their [name hashes] in ascending order.
