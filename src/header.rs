@@ -348,16 +348,16 @@ pub enum CompressionVersion {
     /// Used in the PS3 version of Watch Dogs 1.
     V4,
 
-    /// Used for most archives in WD1
+    /// Used for most archives in WD1.
     V5,
 
-    /// Used in most archives of the Windows version of WD2
+    /// Used in most archives of the Windows version of WD2.
     V6,
 
-    /// Used by all archives of WDL
+    /// Used by all archives of WDL.
     V8,
 
-    /// Used in most archives of the PS4 release of WD2
+    /// Used in most archives of the PS4 release of WD2.
     V9,
 }
 

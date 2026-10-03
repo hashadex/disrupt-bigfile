@@ -1,20 +1,21 @@
-//! Extract, create and inspect BigFile archives used by [Ubisoft's Disrupt engine][Disrupt] in the
+//! Extract, create and inspect BigFile archives used by [Ubisoft's Disrupt engine] in the
 //! [Watch Dogs] games.
 //!
-//! This project aims to be an easy to use, performant, compatible and well documented replacement
-//! for [Gibbed.Disrupt], a tool used for modding Watch Dogs games.
+//! This project aims to be an easy to use, performant, compatible and documented replacement for
+//! [Gibbed.Disrupt], a tool used for modding Watch Dogs games.
 //!
 //! <div class="warning">
 //!
 //! This is the API documentation for the library part of this project, meant for developers to
-//! understand how to use `disrupt-bigfile` in their own projects. See the
-//! [CLI documentation](TODO) if you just want to install mods for your game.
+//! understand how to use `disrupt-bigfile` in their own projects. See the [CLI documentation] if
+//! you just want to install mods for your game.
 //!
 //! </div>
 //!
-//! [Disrupt]: https://en.wikipedia.org/wiki/Ubisoft#Disrupt
+//! [Ubisoft's Disrupt engine]: https://en.wikipedia.org/wiki/Ubisoft#Disrupt
 //! [Watch Dogs]: https://en.wikipedia.org/wiki/Watch_Dogs
 //! [Gibbed.Disrupt]: https://github.com/gibbed/Gibbed.Disrupt
+//! [CLI documentation]: TODO
 //!
 //! # About BigFile
 //!
@@ -31,14 +32,16 @@
 //! compressed and uncompressed sizes, as well as the offset at which the file's content starts in
 //! the DAT.
 //!
-//! Aside from the file information, the FAT also stores various metadata, like the
-//! archive's version, target platform, etc. in its [header].
+//! Aside from the file information, the FAT also stores various metadata, like the archive's
+//! version, target platform, etc. in its [header].
 //!
 //! [`Entry`]: entry::Entry
 //! [FNV-1 hash]: https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1_hash
 //! [header]: FatHeader
 //!
 //! # Usage examples
+//!
+//! These examples demonstrate the most common use cases of this library.
 //!
 //! ## Inspecting a FAT
 //!
@@ -75,14 +78,15 @@
 //! ```no_run
 //! use disrupt_bigfile::{Dat, Fat};
 //!
-//! let entries = Fat::open("path/to/file.fat")?.into_entries();
+//! let fat = Fat::open("path/to/file.fat")?;
 //! let mut dat = Dat::open("path/to/file.dat")?;
 //!
-//! // Use unpack_to_dir to extract individial entries
-//! dat.unpack_to_dir(entries[0], "path/to/dest_dir")?;
+//! // Use unpack_to_dir if you need to extract a small amount of entries
+//! dat.unpack_to_dir(fat.entries()[0], "path/to/dest_dir")?;
 //!
-//! // Using unpack_to_dir_iter will be significantly faster if you need to extract a lot of
-//! // entries in bulk
+//! // But if you need to extract a large amount of entries in bulk, it's better to use
+//! // unpack_to_dir_iter instead, because it offers better performance.
+//! let entries = fat.into_entries();
 //! for (entry, result) in dat.unpack_to_dir_iter(entries, "path/to/dest_dir") {
 //!     match result {
 //!         Ok(()) => println!("Unpacked {entry} successfully"),
@@ -104,17 +108,20 @@
 //! // most archives in the Windows release of Watch Dogs 1:
 //! let header = FatHeader::new_wd1_win64();
 //!
-//! // Then, we create a new ArchiveBuilder using that header:
+//! // Then, we create a new ArchiveBuilder with that metadata configuration:
 //! let mut builder = ArchiveBuilder::create(header, "output_dir/file.dat")?;
 //!
-//! // Use the add_file method to write some files to the DAT. It will automatically compute name
-//! // hashes and create FAT entries for these files.
-//! //
-//! // However, in order for the name hash to be computed correctly, the library needs to know
-//! // where the archive root, the top-level directory with all your input files is.
+//! // Use the add_file method to write some files from your filesystem to the DAT. It will
+//! // automatically compute name hashes and create FAT entries for these files.
 //! let archive_root = "input_dir";
+//!
+//! // Adds from "input_dir/ui/file.xbt"
 //! builder.add_file(archive_root, "ui/file.xbt")?;
+//!
+//! // Adds from "input_dir/domino/file.xbt"
 //! builder.add_file(archive_root, "domino/file.lua")?;
+//!
+//! // Adds from "input_dir/languages/file.xbt"
 //! builder.add_file(archive_root, "languages/file.loc")?;
 //!
 //! // After we're done writing the files, create the FAT:
