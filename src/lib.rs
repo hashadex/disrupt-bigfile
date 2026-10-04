@@ -15,7 +15,7 @@
 //! [Ubisoft's Disrupt engine]: https://en.wikipedia.org/wiki/Ubisoft#Disrupt
 //! [Watch Dogs]: https://en.wikipedia.org/wiki/Watch_Dogs
 //! [Gibbed.Disrupt]: https://github.com/gibbed/Gibbed.Disrupt
-//! [CLI documentation]: TODO
+//! [CLI documentation]: https://github.com/hashadex/disrupt-bigfile/blob/main/README.md
 //!
 //! # About BigFile
 //!
