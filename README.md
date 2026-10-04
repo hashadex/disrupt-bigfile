@@ -3,8 +3,9 @@
 A CLI tool and Rust library for inspecting, extracting and creating BigFile archives used by
 [Ubisoft's Disrupt engine] in the [Watch Dogs] games.
 
-This project aims to be an easy to use, performant, compatible and documented replacement for
-[Gibbed.Disrupt], a tool used for modding Watch Dogs games.
+This project is heavily based on the research done in the [Gibbed.Disrupt] project, a tool used for
+modding Watch Dogs games. This project aims to be an easy-to-use, performant, compatible and
+documented alternative for it.
 
 > [!NOTE]
 > This documentation is for the CLI part of this project, meant for users and mod authors to learn
