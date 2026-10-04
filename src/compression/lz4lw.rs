@@ -76,6 +76,9 @@ pub(crate) fn decompress_lz4lw(
     mut out: impl Write,
     entry: Entry,
 ) -> Result<u64, Error> {
+    // Decompressor implementation based on the reverse engineered code from @ahmet-celik
+    // https://github.com/gibbed/Gibbed.Disrupt/issues/2#issuecomment-722033656
+
     if entry.compressed_size > entry.uncompressed_size {
         return Err(Error::InvalidEntrySizes {
             uncompressed_size: entry.uncompressed_size,
