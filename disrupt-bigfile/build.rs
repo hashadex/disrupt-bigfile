@@ -1,245 +1,95 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::hash::Hasher;
-use std::io::{self, BufRead, BufReader};
+use std::env;
+use std::fs;
+use std::hash::{BuildHasher, Hasher};
 use std::path::PathBuf;
-use std::{env, fs};
 
-use fnv1::Fnv1Hasher;
+use anyhow::Context;
+use fnv1::Fnv1BuildHasher;
 use rkyv::rancor::Error;
 use rkyv::{Archive, Serialize};
 
-const FILELIST_PATHS: [&str; 157] = [
-    "filelists/wd1/common.filelist",
-    "filelists/wd1/dlc/dlc_exclusive/dlc_exclusive.filelist",
-    "filelists/wd1/dlc/dlc_exclusive/dlc_exclusive_brazilian.filelist",
-    "filelists/wd1/dlc/dlc_exclusive/dlc_exclusive_english.filelist",
-    "filelists/wd1/dlc/dlc_exclusive/dlc_exclusive_french.filelist",
-    "filelists/wd1/dlc/dlc_exclusive/dlc_exclusive_german.filelist",
-    "filelists/wd1/dlc/dlc_exclusive/dlc_exclusive_italian.filelist",
-    "filelists/wd1/dlc/dlc_exclusive/dlc_exclusive_japanese.filelist",
-    "filelists/wd1/dlc/dlc_exclusive/dlc_exclusive_russian.filelist",
-    "filelists/wd1/dlc/dlc_exclusive/dlc_exclusive_spanish.filelist",
-    "filelists/wd1/dlc/dlc_pill_people/dlc_pill_people.filelist",
-    "filelists/wd1/dlc/dlc_solo/dlc_solo.filelist",
-    "filelists/wd1/dlc/dlc_solo/dlc_solo_brazilian.filelist",
-    "filelists/wd1/dlc/dlc_solo/dlc_solo_english.filelist",
-    "filelists/wd1/dlc/dlc_solo/dlc_solo_french.filelist",
-    "filelists/wd1/dlc/dlc_solo/dlc_solo_german.filelist",
-    "filelists/wd1/dlc/dlc_solo/dlc_solo_italian.filelist",
-    "filelists/wd1/dlc/dlc_solo/dlc_solo_japanese.filelist",
-    "filelists/wd1/dlc/dlc_solo/dlc_solo_russian.filelist",
-    "filelists/wd1/dlc/dlc_solo/dlc_solo_spanish.filelist",
-    "filelists/wd1/patch.filelist",
-    "filelists/wd1/patch1.filelist",
-    "filelists/wd1/shaders.filelist",
-    "filelists/wd1/shadersobj.filelist",
-    "filelists/wd1/sound.filelist",
-    "filelists/wd1/sound_brazilian.filelist",
-    "filelists/wd1/sound_english.filelist",
-    "filelists/wd1/sound_french.filelist",
-    "filelists/wd1/sound_german.filelist",
-    "filelists/wd1/sound_italian.filelist",
-    "filelists/wd1/sound_japanese.filelist",
-    "filelists/wd1/sound_russian.filelist",
-    "filelists/wd1/sound_spanish.filelist",
-    "filelists/wd1/videos.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city_brazilian.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city_cache.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city_english.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city_french.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city_german.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city_italian.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city_japanese.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city_russian.filelist",
-    "filelists/wd1/worlds/windy_city/windy_city_spanish.filelist",
-    "filelists/wd2/common.filelist",
-    "filelists/wd2/dlc/dlc_ultra_textures/dlc_ultra_textures.filelist",
-    "filelists/wd2/installpackage.filelist",
-    "filelists/wd2/installpackage_brazilian.filelist",
-    "filelists/wd2/installpackage_english.filelist",
-    "filelists/wd2/installpackage_french.filelist",
-    "filelists/wd2/installpackage_german.filelist",
-    "filelists/wd2/installpackage_italian.filelist",
-    "filelists/wd2/installpackage_japanese.filelist",
-    "filelists/wd2/installpackage_mexican.filelist",
-    "filelists/wd2/installpackage_russian.filelist",
-    "filelists/wd2/installpackage_spanish.filelist",
-    "filelists/wd2/patch.filelist",
-    "filelists/wd2/patch2.filelist",
-    "filelists/wd2/patch2_brazilian.filelist",
-    "filelists/wd2/patch2_english.filelist",
-    "filelists/wd2/patch2_french.filelist",
-    "filelists/wd2/patch2_german.filelist",
-    "filelists/wd2/patch2_italian.filelist",
-    "filelists/wd2/patch2_japanese.filelist",
-    "filelists/wd2/patch2_mexican.filelist",
-    "filelists/wd2/patch2_russian.filelist",
-    "filelists/wd2/patch2_spanish.filelist",
-    "filelists/wd2/patch_brazilian.filelist",
-    "filelists/wd2/patch_english.filelist",
-    "filelists/wd2/patch_french.filelist",
-    "filelists/wd2/patch_german.filelist",
-    "filelists/wd2/patch_italian.filelist",
-    "filelists/wd2/patch_japanese.filelist",
-    "filelists/wd2/patch_mexican.filelist",
-    "filelists/wd2/patch_russian.filelist",
-    "filelists/wd2/patch_spanish.filelist",
-    "filelists/wd2/shadersobj.filelist",
-    "filelists/wd2/sound.filelist",
-    "filelists/wd2/sound_brazilian.filelist",
-    "filelists/wd2/sound_english.filelist",
-    "filelists/wd2/sound_french.filelist",
-    "filelists/wd2/sound_german.filelist",
-    "filelists/wd2/sound_italian.filelist",
-    "filelists/wd2/sound_japanese.filelist",
-    "filelists/wd2/sound_mexican.filelist",
-    "filelists/wd2/sound_russian.filelist",
-    "filelists/wd2/sound_spanish.filelist",
-    "filelists/wd2/videos.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_brazilian.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_cache.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_cache_patch.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_english.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_french.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_german.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_hires.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_italian.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_japanese.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_mexican.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_preload.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_russian.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound_brazilian.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound_english.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound_french.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound_german.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound_italian.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound_japanese.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound_mexican.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound_russian.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_sound_spanish.filelist",
-    "filelists/wd2/worlds/san_francisco/san_francisco_spanish.filelist",
-    "filelists/wdl/common.filelist",
-    "filelists/wdl/commonengine.filelist",
-    "filelists/wdl/patch.filelist",
-    "filelists/wdl/patch_brazilian.filelist",
-    "filelists/wdl/patch_english.filelist",
-    "filelists/wdl/patch_french.filelist",
-    "filelists/wdl/patch_german.filelist",
-    "filelists/wdl/patch_italian.filelist",
-    "filelists/wdl/patch_japanese.filelist",
-    "filelists/wdl/patch_russian.filelist",
-    "filelists/wdl/patch_spanish.filelist",
-    "filelists/wdl/shadersobj.filelist",
-    "filelists/wdl/sound.filelist",
-    "filelists/wdl/sound_brazilian.filelist",
-    "filelists/wdl/sound_english.filelist",
-    "filelists/wdl/sound_french.filelist",
-    "filelists/wdl/sound_german.filelist",
-    "filelists/wdl/sound_italian.filelist",
-    "filelists/wdl/sound_japanese.filelist",
-    "filelists/wdl/sound_russian.filelist",
-    "filelists/wdl/sound_spanish.filelist",
-    "filelists/wdl/videos.filelist",
-    "filelists/wdl/videos_ultra.filelist",
-    "filelists/wdl/worlds/london/london.filelist",
-    "filelists/wdl/worlds/london/london_brazilian.filelist",
-    "filelists/wdl/worlds/london/london_cache.filelist",
-    "filelists/wdl/worlds/london/london_english.filelist",
-    "filelists/wdl/worlds/london/london_french.filelist",
-    "filelists/wdl/worlds/london/london_german.filelist",
-    "filelists/wdl/worlds/london/london_hires.filelist",
-    "filelists/wdl/worlds/london/london_italian.filelist",
-    "filelists/wdl/worlds/london/london_japanese.filelist",
-    "filelists/wdl/worlds/london/london_preload.filelist",
-    "filelists/wdl/worlds/london/london_russian.filelist",
-    "filelists/wdl/worlds/london/london_sound.filelist",
-    "filelists/wdl/worlds/london/london_sound_brazilian.filelist",
-    "filelists/wdl/worlds/london/london_sound_english.filelist",
-    "filelists/wdl/worlds/london/london_sound_french.filelist",
-    "filelists/wdl/worlds/london/london_sound_german.filelist",
-    "filelists/wdl/worlds/london/london_sound_italian.filelist",
-    "filelists/wdl/worlds/london/london_sound_japanese.filelist",
-    "filelists/wdl/worlds/london/london_sound_russian.filelist",
-    "filelists/wdl/worlds/london/london_sound_spanish.filelist",
-    "filelists/wdl/worlds/london/london_spanish.filelist",
-    "filelists/wdl/worlds/london/london_ultra.filelist",
-];
+#[allow(
+    dead_code,
+    reason = "function may become unused if all filelist features are disabled"
+)]
+fn read_filelists(
+    filelists: &[&'static str],
+    fat3_hash: bool,
+) -> impl Iterator<Item = (u64, &'static str)> {
+    let builder = Fnv1BuildHasher::new();
+
+    filelists
+        .iter()
+        .flat_map(|filelist| filelist.lines())
+        .filter(|filename| !filename.starts_with(';'))
+        .map(move |filename| {
+            let mut hasher = builder.build_hasher();
+            hasher.write(filename.as_bytes());
+            let mut hash = hasher.finish();
+
+            if fat3_hash {
+                hash &= 0xFFFF_FFFF;
+            } else {
+                hash &= 0x1FFF_FFFF_FFFF_FFFF;
+                hash |= 0xA000_0000_0000_0000;
+            }
+
+            (hash, filename)
+        })
+}
 
 #[derive(Archive, Serialize)]
 struct NameHashDb {
     entries: Vec<(u64, String)>,
 }
 
-fn main() -> Result<(), String> {
-    println!("cargo::rerun-if-changed=filelists");
+fn main() -> anyhow::Result<()> {
+    let filelists_wd1 = cfg_select! {
+        feature = "wd1" => read_filelists(&disrupt_bigfile_filelists_wd1::FILELISTS, true),
+        _ => std::iter::empty(),
+    };
+    let filelists_wd2 = cfg_select! {
+        feature = "wd2" => read_filelists(&disrupt_bigfile_filelists_wd2::FILELISTS, false),
+        _ => std::iter::empty(),
+    };
+    let filelists_wdl = cfg_select! {
+        feature = "wdl" => read_filelists(&disrupt_bigfile_filelists_wdl::FILELISTS, false),
+        _ => std::iter::empty(),
+    };
 
-    let mut hash_filename_map = HashMap::new();
-    let mut colliding_hashes = HashSet::new();
+    let filenames = filelists_wd1.chain(filelists_wd2).chain(filelists_wdl);
 
-    for filelist_path in FILELIST_PATHS {
-        let mut new_filenames_count = 0;
+    let mut hash_filename_map: HashMap<u64, &str> = HashMap::new();
+    let mut colliding_hashes: HashSet<u64> = HashSet::new(); // TODO
 
-        let fat3_hash = filelist_path.starts_with("filelists/wd1");
-
-        let filelist_file = BufReader::new(File::open(filelist_path).map_err(|err| {
-            format!(
-                "failed to open filelist {filelist_path}: {err}; make sure you have cloned the repo with submodules"
-            )
-        })?);
-
-        let filenames = filelist_file
-            .lines()
-            .collect::<io::Result<Vec<_>>>()
-            .map_err(|err| format!("failed to read all filenames from {filelist_path}: {err}"))?
-            .into_iter()
-            .filter(|filename| !filename.starts_with(';'));
-
-        for filename in filenames {
-            let mut hasher = Fnv1Hasher::new();
-            hasher.write(filename.as_bytes());
-
-            let mut name_hash = hasher.finish();
-            if fat3_hash {
-                name_hash &= 0xFFFF_FFFF;
-            } else {
-                name_hash &= 0x1FFF_FFFF_FFFF_FFFF;
-                name_hash |= 0xA000_0000_0000_0000;
-            }
-
-            if colliding_hashes.contains(&name_hash) {
-                continue;
-            }
-
-            match hash_filename_map.entry(name_hash) {
-                Entry::Occupied(entry) => {
-                    let other_filename = entry.get();
-
-                    if *other_filename != filename {
-                        println!("collision: '{other_filename}' vs '{filename}'");
-
-                        colliding_hashes.insert(name_hash);
-                        entry.remove();
-                    }
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(filename);
-                    new_filenames_count += 1;
-                }
-            }
+    for (name_hash, filename) in filenames {
+        if colliding_hashes.contains(&name_hash) {
+            continue;
         }
 
-        println!("read {new_filenames_count} new filenames from {filelist_path}");
+        match hash_filename_map.entry(name_hash) {
+            Entry::Vacant(e) => {
+                e.insert(filename);
+            }
+            Entry::Occupied(e) => {
+                let other_filename = e.get();
+
+                if filename != *other_filename {
+                    println!("collision: '{filename}' vs '{other_filename}");
+
+                    e.remove();
+                    colliding_hashes.insert(name_hash);
+                }
+            }
+        };
     }
 
     println!(
         "read {} filenames, {} collisions. building db file...",
         hash_filename_map.len(),
-        colliding_hashes.len(),
+        colliding_hashes.len()
     );
 
     let mut entries: Vec<(u64, String)> = hash_filename_map
@@ -249,17 +99,14 @@ fn main() -> Result<(), String> {
     entries.sort_unstable_by_key(|entry| entry.0);
 
     let db = NameHashDb { entries };
-    let db_bytes = rkyv::to_bytes::<Error>(&db)
-        .map_err(|err| format!("failed to serialize name hash db: {err}"))?;
+    let db_bytes = rkyv::to_bytes::<Error>(&db).context("failed to serialize name hash db")?;
 
-    let out_dir_path =
-        env::var("OUT_DIR").map_err(|err| format!("failed to get env var 'OUT_DIR': {err}"))?;
-    let archive_path: PathBuf = [&out_dir_path, "name_hash_db.rkyv"].iter().collect();
+    let db_file_path: PathBuf = [
+        &env::var("OUT_DIR").expect("OUT_DIR should be set by cargo"),
+        "name_hash_db.rkyv",
+    ]
+    .iter()
+    .collect();
 
-    fs::write(&archive_path, db_bytes)
-        .map_err(|err| format!("failed to write db to file: {err}"))?;
-
-    println!("all done!");
-
-    Ok(())
+    fs::write(db_file_path, db_bytes).context("failed to write to db file")
 }

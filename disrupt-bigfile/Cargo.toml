@@ -14,10 +14,20 @@ rkyv = "0.8.15"
 thiserror = "2.0.18"
 walkdir = "2.5.0"
 
+[build-dependencies]
+anyhow = "1.0.103"
+fnv1 = "1.0.0"
+rkyv = "0.8.15"
+disrupt-bigfile-filelists-wd1 = { path = "../disrupt-bigfile-filelists-wd1", optional = true }
+disrupt-bigfile-filelists-wd2 = { path = "../disrupt-bigfile-filelists-wd2", optional = true }
+disrupt-bigfile-filelists-wdl = { path = "../disrupt-bigfile-filelists-wdl", optional = true }
+
+[features]
+default = ["wd1", "wd2", "wdl"]
+wd1 = ["dep:disrupt-bigfile-filelists-wd1"]
+wd2 = ["dep:disrupt-bigfile-filelists-wd2"]
+wdl = ["dep:disrupt-bigfile-filelists-wdl"]
+
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 doc_markdown = "allow"
-
-[build-dependencies]
-fnv1 = "1.0.0"
-rkyv = "0.8.15"

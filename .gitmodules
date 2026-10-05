@@ -1,9 +1,9 @@
 [submodule "filelists/wd1"]
-	path = filelists/wd1
+	path = disrupt-bigfile-filelists-wd1/wd1
 	url = https://github.com/gibbed/WatchDogs-File-Lists.git
 [submodule "filelists/wd2"]
-	path = filelists/wd2
+	path = disrupt-bigfile-filelists-wd2/wd2
 	url = https://github.com/gibbed/WatchDogs2-File-Lists.git
 [submodule "filelists/wdl"]
-	path = filelists/wdl
+	path = disrupt-bigfile-filelists-wdl/wdl
 	url = https://github.com/gibbed/WatchDogsLegion-File-Lists

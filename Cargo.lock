@@ -170,6 +170,9 @@ dependencies = [
  "anyhow",
  "byteorder",
  "clap",
+ "disrupt-bigfile-filelists-wd1",
+ "disrupt-bigfile-filelists-wd2",
+ "disrupt-bigfile-filelists-wdl",
  "fnv1",
  "indicatif",
  "lzxd",
@@ -177,6 +180,18 @@ dependencies = [
  "thiserror",
  "walkdir",
 ]
+
+[[package]]
+name = "disrupt-bigfile-filelists-wd1"
+version = "0.1.0"
+
+[[package]]
+name = "disrupt-bigfile-filelists-wd2"
+version = "0.1.0"
+
+[[package]]
+name = "disrupt-bigfile-filelists-wdl"
+version = "0.1.0"
 
 [[package]]
 name = "encode_unicode"

@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["disrupt-bigfile"]
+members = ["disrupt-bigfile", "disrupt-bigfile-filelists-wd1", "disrupt-bigfile-filelists-wd2", "disrupt-bigfile-filelists-wdl"]
