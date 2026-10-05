@@ -61,8 +61,8 @@ fn main() -> anyhow::Result<()> {
 
     let filenames = filelists_wd1.chain(filelists_wd2).chain(filelists_wdl);
 
-    let mut hash_filename_map: HashMap<u64, &str> = HashMap::new();
-    let mut colliding_hashes: HashSet<u64> = HashSet::new(); // TODO
+    let mut hash_filename_map = HashMap::new();
+    let mut colliding_hashes = HashSet::new();
 
     for (name_hash, filename) in filenames {
         if colliding_hashes.contains(&name_hash) {
