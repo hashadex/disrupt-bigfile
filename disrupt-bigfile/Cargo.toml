@@ -7,7 +7,7 @@ description = "Unofficial tool for manipulating Ubisoft BigFile archives"
 readme = "../README.md"
 repository = "https://github.com/hashadex/disrupt-bigfile"
 license = "MIT"
-keyword = ["archive", "bigfile", "ubisoft", "watch_dogs"]
+keywords = ["archive", "bigfile", "ubisoft", "watch_dogs"]
 categories = ["command-line-utilities"]
 
 [dependencies]
