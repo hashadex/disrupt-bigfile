@@ -2,5 +2,11 @@
 name = "disrupt-bigfile-filelists-wd2"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.96"
+description = "Watch Dogs 2 filelist package for disrupt-bigfile"
+readme = "../README_FILELISTS.md"
+repository = "https://github.com/hashadex/disrupt-bigfile"
+license = "MIT"
+exclude = ["wd2/.gitignore", "wd2/README.md", "wd2/status.txt"]
 
 [dependencies]

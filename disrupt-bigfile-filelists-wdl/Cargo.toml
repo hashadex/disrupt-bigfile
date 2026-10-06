@@ -2,5 +2,11 @@
 name = "disrupt-bigfile-filelists-wdl"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.96"
+description = "Watch Dogs: Legion filelist package for disrupt-bigfile"
+readme = "../README_FILELISTS.md"
+repository = "https://github.com/hashadex/disrupt-bigfile"
+license = "MIT"
+exclude = ["wdl/.gitignore", "wdl/README.md", "wdl/status.txt"]
 
 [dependencies]
