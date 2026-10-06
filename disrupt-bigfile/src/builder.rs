@@ -102,7 +102,7 @@ impl<W: Write + Seek> ArchiveBuilder<W> {
 
     fn compute_name_hash(&self, path: &Path) -> Option<u64> {
         if path.starts_with("__UNKNOWN") {
-            let stem = path.file_stem()?.to_str()?;
+            let stem = path.file_prefix()?.to_str()?;
             u64::from_str_radix(stem, 16).ok()
         } else {
             // By avoiding calling functions like to_str when hashing regular paths and using
