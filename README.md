@@ -38,7 +38,7 @@ If you have Rust and Cargo installed, you can download the source code of disrup
 crates.io and compile it on your machine using `cargo install`:
 
 ```sh
-$ cargo install disrupt-bigfile
+$ cargo install --features "cli" disrupt-bigfile
 ```
 
 ## Usage
