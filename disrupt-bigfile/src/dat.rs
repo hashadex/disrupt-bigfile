@@ -322,6 +322,7 @@ impl<R: Read + Seek> Dat<R> {
     /// [`Entries`]: Entry
     /// [`try_for_each`]: Iterator::try_for_each
     /// [`offset`]: Entry::offset
+    /// [`indicatif`]: https://crates.io/indicatif
     ///
     /// # Examples
     ///
