@@ -1,8 +1,17 @@
 //! Extract, create and inspect BigFile archives used by [Ubisoft's Disrupt engine] in the
 //! [Watch Dogs] games.
 //!
-//! This project aims to be an easy to use, performant, compatible and documented replacement for
-//! [Gibbed.Disrupt], a tool used for modding Watch Dogs games.
+//! This project is heavily based on the research done in the [Gibbed.Disrupt] project, a tool used
+//! for modding Watch Dogs games. This project aims to be an easy-to-use, performant, compatible
+//! and documented alternative for it.
+//!
+//! <div class="warning">
+//!
+//! This is an unofficial, fan-made project and is not affiliated with, endorsed by, or approved by
+//! Ubisoft. Watch Dogs, and all related trademarks, characters and intellectual property are owned
+//! by Ubisoft.
+//!
+//! </div>
 //!
 //! <div class="warning">
 //!

@@ -8,6 +8,11 @@ modding Watch Dogs games. This project aims to be an easy-to-use, performant, co
 documented alternative for it.
 
 > [!NOTE]
+> This is an unofficial, fan-made project and is not affiliated with, endorsed by, or approved by
+> Ubisoft. Watch Dogs, and all related trademarks, characters and intellectual property are owned
+> by Ubisoft.
+
+> [!NOTE]
 > This documentation is for the CLI part of this project, meant for users and mod authors to learn
 > how to manipulate BigFile archives using the CLI. If you are a developer and you want to use
 > disrupt-bigfile as a library in your own projects, see the [API documentation].
