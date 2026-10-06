@@ -4,6 +4,8 @@ use std::fmt;
 use std::io::{self, Read, Write};
 
 use byteorder::{LE, ReadBytesExt, WriteBytesExt};
+
+#[cfg(feature = "cli")]
 use clap::ValueEnum;
 
 use crate::fat::{FatConstructionError, FatDeserializationError};
@@ -36,14 +38,15 @@ pub const FAT5_MAGIC: u32 = 0x4641_5435;
 /// [`Fat5`]: Self::Fat5
 /// [`33 54 41 46`]: FAT3_MAGIC
 /// [`35 54 41 46`]: FAT5_MAGIC
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
 pub enum FatVersion {
     /// Used in Watch Dogs 1.
-    #[value(name = "v3")]
+    #[cfg_attr(feature = "cli", value(name = "v3"))]
     Fat3,
 
     /// Used in Watch Dogs 2 and Legion.
-    #[value(name = "v5")]
+    #[cfg_attr(feature = "cli", value(name = "v5"))]
     Fat5,
 }
 
@@ -121,7 +124,8 @@ impl fmt::Display for FatVersion {
 /// [`Entries`]: crate::entry::Entry
 /// [`V13`]: Self::V13
 /// [Gibbed.Disrupt]: https://github.com/gibbed/Gibbed.Disrupt
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
 pub enum TableVersion {
     V7,
 
@@ -200,7 +204,8 @@ impl fmt::Display for TableVersion {
 /// [`Entry`]: crate::entry::Entry
 /// [`Fat3`]: FatVersion::Fat3
 /// [`Fat5`]: FatVersion::Fat5
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
 #[non_exhaustive]
 pub enum Platform {
     /// Any platform. Used for the uncompressed sound archives in Watch Dogs 1 and 2.
@@ -340,7 +345,8 @@ impl fmt::Display for Platform {
 /// [`CompressionSchemes`]: crate::entry::CompressionScheme
 /// [scheme IDs]: crate::entry::CompressionScheme#scheme-ids
 /// [`Entries`]: crate::entry::Entry
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
 pub enum CompressionVersion {
     /// Used in Watch Dogs 1 and 2 for the uncompressed sound archives.
     V0,
@@ -408,7 +414,8 @@ impl fmt::Display for CompressionVersion {
 /// Not sure what its purpose is.
 ///
 /// [`Entry` name hash]: crate::entry::Entry::name_hash
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
 pub enum NameHashVersion {
     /// Used in the Windows release of Watch Dogs 1.
     V50,
