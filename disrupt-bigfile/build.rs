@@ -46,6 +46,8 @@ struct NameHashDb {
 }
 
 fn main() -> anyhow::Result<()> {
+    println!("cargo::rerun-if-changed=build.rs");
+
     let filelists_wd1 = cfg_select! {
         feature = "wd1" => read_filelists(&disrupt_bigfile_filelists_wd1::FILELISTS, true),
         _ => std::iter::empty(),
