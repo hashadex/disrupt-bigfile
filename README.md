@@ -28,7 +28,7 @@ documented alternative for it.
 
 1. Go to the [latest release] page.
 2. In the **Assets** list, click on the executable file appropriate for your platform in order to
-   download it. For example, if you are on Windows, click on the .exe file.
+   download it.
 
 [latest release]: https://github.com/hashadex/disrupt-bigfile/releases/latest
 
